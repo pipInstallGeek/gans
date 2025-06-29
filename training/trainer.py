@@ -80,7 +80,7 @@ class GANTrainer:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     gc.collect()
-                    print(f"🧹 GPU memory cleaned at epoch {epoch + 1}")
+                    print(f"GPU memory cleaned at epoch {epoch + 1}")
             
             print(f'Epoch [{epoch+1}/{self.config.epochs}] '
                   f'G_loss: {avg_g_loss:.4f} D_loss: {avg_d_loss:.4f}')
@@ -89,13 +89,11 @@ class GANTrainer:
         
         # FINAL PERFORMANCE STATS
         if torch.cuda.is_available():
-            print(f"📊 Final GPU Memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
-            print(f"📊 Max GPU Memory: {torch.cuda.max_memory_allocated(0) / 1e9:.2f} GB")
+            print(f"Final GPU Memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+            print(f"Max GPU Memory: {torch.cuda.max_memory_allocated(0) / 1e9:.2f} GB")
         
-        print(f"⚡ Training completed in {training_time:.2f} seconds")
-        print(f"⚡ Average time per epoch: {training_time/self.config.epochs:.1f} seconds")
-        print(f"⚡ Speedup estimate: ~{60*10/training_time:.1f}x faster than CPU")
-        
+        print(f"Training completed in {training_time:.2f} seconds")
+        print(f"Average time per epoch: {training_time/self.config.epochs:.1f} seconds")        
         # Save final model
         model.save_models(self.config.epochs, model_name, dataset_name)
         self.save_training_curves(model, model_name, dataset_name)
@@ -104,7 +102,7 @@ class GANTrainer:
     
     def save_samples(self, model, epoch, model_name, dataset_name):
         """GPU-optimized sample generation"""
-        print(f"💾 Saving samples for epoch {epoch}...")
+        print(f"Saving samples for epoch {epoch}...")
         
         # CLEAR MEMORY before sample generation
         if torch.cuda.is_available():

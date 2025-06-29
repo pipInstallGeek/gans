@@ -1,9 +1,12 @@
-# models/base_gan.py
+# models/base_gan.py - UPDATED WITH GENERIC ARCHITECTURE
+# =====================================================
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from abc import ABC, abstractmethod
 import os
+import math
 
 class BaseGAN(ABC):
     """Abstract base class for all GAN implementations"""
@@ -87,7 +90,7 @@ class BaseGAN(ABC):
             return all_samples
         else:
             return all_samples
-
+    
     def save_models(self, epoch, model_name, dataset_name):
         """GPU-optimized model saving with memory management"""
         save_dir = os.path.join(self.config.models_dir, f"{model_name}_{dataset_name}")
@@ -113,11 +116,11 @@ class BaseGAN(ABC):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        print(f"💾 Model saved: epoch_{epoch}.pth")
-
+        print(f"Model saved: epoch_{epoch}.pth")
+    
     def load_models(self, checkpoint_path):
         """GPU-optimized model loading with memory management"""
-        print(f"📥 Loading checkpoint: {os.path.basename(checkpoint_path)}")
+        print(f"Loading checkpoint: {os.path.basename(checkpoint_path)}")
         
         # CLEAR GPU MEMORY before loading
         if torch.cuda.is_available():
@@ -143,7 +146,7 @@ class BaseGAN(ABC):
         self.d_losses = checkpoint['d_losses']
         
         epoch = checkpoint['epoch']
-        print(f"✅ Checkpoint loaded successfully! Epoch: {epoch}")
+        print(f"Checkpoint loaded successfully! Epoch: {epoch}")
         
         # CLEAR GPU MEMORY after loading
         if torch.cuda.is_available():
@@ -155,142 +158,253 @@ def weights_init(m):
     """Initialize network weights"""
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        if hasattr(m, 'weight'):  # ADD THIS CHECK
+        if hasattr(m, 'weight'):
             nn.init.normal_(m.weight.data, 0.0, 0.02)
     elif classname.find('BatchNorm') != -1:
-        if hasattr(m, 'weight'):  # ADD THIS CHECK
+        if hasattr(m, 'weight'):
             nn.init.normal_(m.weight.data, 1.0, 0.02)
-        if hasattr(m, 'bias'):    # ADD THIS CHECK
+        if hasattr(m, 'bias'):
             nn.init.constant_(m.bias.data, 0)
 
+# ============================================================================
+# GENERIC CONVOLUTIONAL GENERATOR - WORKS FOR ANY IMAGE SIZE
+# ============================================================================
+
 class ConvGenerator(nn.Module):
-    """Convolutional Generator for DCGAN-style architectures"""
+    """Generic Generator that adapts to ANY image size"""
     
-    def __init__(self, z_dim, num_channels, ngf, image_size):
+    def __init__(self, z_dim, num_channels, ngf, target_size):
         super(ConvGenerator, self).__init__()
         self.z_dim = z_dim
         self.num_channels = num_channels
         self.ngf = ngf
+        self.target_size = target_size
         
-        # Calculate the size of the first layer
-        if image_size == 28:  # MNIST
-            self.init_size = 7
-        elif image_size == 32:  # CIFAR-10
-            self.init_size = 4
-        elif image_size == 64:  # CelebA
-            self.init_size = 4
-        else:
-            self.init_size = 4
+        # Calculate the architecture automatically
+        self.layers_info = self._calculate_architecture()
         
-        self.l1 = nn.Sequential(
-            nn.Linear(z_dim, ngf * 8 * self.init_size * self.init_size),
-            nn.BatchNorm1d(ngf * 8 * self.init_size * self.init_size),
+        # Build the initial linear layer
+        self.initial_layer = self._build_initial_layer()
+        
+        # Build the convolutional layers
+        self.conv_layers = self._build_conv_layers()
+        
+        print(f"Generic Generator: {target_size}×{target_size}, layers: {self.layers_info['layers_needed']}")
+    
+    def _calculate_architecture(self):
+        """Calculate the required architecture for target image size"""
+        
+        # Find the best starting size (power of 2, <= 8)
+        possible_starts = [4, 8]
+        best_architecture = None
+        
+        for start_size in possible_starts:
+            layers_needed = 0
+            current_size = start_size
+            
+            # Count upsampling layers needed
+            while current_size < self.target_size:
+                current_size *= 2
+                layers_needed += 1
+            
+            # Check if we can reach target exactly or get close
+            if current_size == self.target_size:
+                best_architecture = {
+                    'start_size': start_size,
+                    'layers_needed': layers_needed,
+                    'final_size': current_size,
+                    'exact_match': True
+                }
+                break
+            elif best_architecture is None or current_size < best_architecture['final_size']:
+                best_architecture = {
+                    'start_size': start_size,
+                    'layers_needed': layers_needed,
+                    'final_size': current_size,
+                    'exact_match': False
+                }
+        
+        return best_architecture
+    
+    def _build_initial_layer(self):
+        """Build the initial linear layer"""
+        start_size = self.layers_info['start_size']
+        initial_features = self.ngf * 8 * start_size * start_size
+        
+        return nn.Sequential(
+            nn.Linear(self.z_dim, initial_features),
+            nn.BatchNorm1d(initial_features),
             nn.ReLU(True)
         )
-        
+    
+    def _build_conv_layers(self):
+        """Build convolutional layers dynamically"""
         layers = []
         
-        if image_size == 28:  # MNIST - FIXED VERSION
-            layers.extend([
-                # 7×7 → 14×14
-                nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ngf * 4),
-                nn.ReLU(True),
-                # 14×14 → 28×28
-                nn.ConvTranspose2d(ngf * 4, num_channels, 4, 2, 1, bias=False),
-                nn.Tanh()
-            ])
-        else:  # CIFAR-10 and CelebA
-            layers.extend([
-                nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ngf * 4),
-                nn.ReLU(True),
-                nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ngf * 2),
-                nn.ReLU(True),
-                nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ngf),
-                nn.ReLU(True)
-            ])
+        start_size = self.layers_info['start_size']
+        layers_needed = self.layers_info['layers_needed']
+        
+        # Calculate channel progression
+        current_channels = self.ngf * 8
+        current_size = start_size
+        
+        for layer_idx in range(layers_needed):
+            # Calculate next layer parameters
+            next_size = current_size * 2
             
-            if image_size == 64:  # Additional layer for CelebA
+            # Channel reduction as we go up
+            if layer_idx == layers_needed - 1:
+                # Final layer outputs target channels
+                next_channels = self.num_channels
+            else:
+                # Reduce channels as we go up
+                next_channels = max(self.ngf, current_channels // 2)
+            
+            # Build layer
+            if layer_idx == layers_needed - 1:
+                # Final layer (no batch norm, use Tanh)
                 layers.extend([
-                    nn.ConvTranspose2d(ngf, num_channels, 4, 2, 1, bias=False),
+                    nn.ConvTranspose2d(current_channels, next_channels, 4, 2, 1, bias=False),
                     nn.Tanh()
                 ])
-            else:  # CIFAR-10
+            else:
+                # Intermediate layer
                 layers.extend([
-                    nn.ConvTranspose2d(ngf, num_channels, 4, 2, 1, bias=False),
-                    nn.Tanh()
+                    nn.ConvTranspose2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                    nn.BatchNorm2d(next_channels),
+                    nn.ReLU(True)
                 ])
+            
+            current_channels = next_channels
+            current_size = next_size
         
-        self.conv_layers = nn.Sequential(*layers)
-        
+        return nn.Sequential(*layers)
+    
     def forward(self, z):
-        out = self.l1(z)
-        out = out.view(out.shape[0], -1, self.init_size, self.init_size)
+        # Linear layer
+        out = self.initial_layer(z)
+        
+        # Reshape for conv layers
+        start_size = self.layers_info['start_size']
+        out = out.view(out.shape[0], -1, start_size, start_size)
+        
+        # Conv layers
         out = self.conv_layers(out)
-        return out  # FIXED: Return out instead of undefined variables
+        
+        # Handle final size adjustment if needed
+        if out.shape[-1] != self.target_size:
+            out = nn.functional.interpolate(out, size=(self.target_size, self.target_size), 
+                                          mode='bilinear', align_corners=False)
+        
+        return out
+
+# ============================================================================
+# GENERIC CONVOLUTIONAL DISCRIMINATOR - WORKS FOR ANY IMAGE SIZE  
+# ============================================================================
 
 class ConvDiscriminator(nn.Module):
-    """Convolutional Discriminator for DCGAN-style architectures"""
+    """Generic Discriminator that adapts to ANY image size"""
     
     def __init__(self, num_channels, ndf, image_size):
         super(ConvDiscriminator, self).__init__()
         self.num_channels = num_channels
         self.ndf = ndf
+        self.image_size = image_size
         
+        # Calculate architecture automatically
+        self.layers_info = self._calculate_architecture()
+        
+        # Build layers
+        self.main = self._build_layers()
+        
+        print(f"Generic Discriminator: {image_size}×{image_size}, layers: {self.layers_info['layers_needed']}")
+    
+    def _calculate_architecture(self):
+        """Calculate required layers to reduce image to 1×1"""
+        
+        layers_needed = 0
+        current_size = self.image_size
+        size_progression = [current_size]
+        
+        # Calculate layer sequence
+        while current_size > 1:
+            if current_size <= 4:
+                # For small sizes, go directly to 1×1
+                layers_needed += 1
+                size_progression.append(1)
+                break
+            else:
+                # Regular halving
+                current_size = current_size // 2
+                layers_needed += 1
+                size_progression.append(current_size)
+        
+        return {
+            'layers_needed': layers_needed,
+            'size_progression': size_progression
+        }
+    
+    def _build_layers(self):
+        """Build discriminator layers dynamically"""
         layers = []
         
-        if image_size == 28:  # MNIST - FIXED VERSION
-            layers.extend([
-                nn.Conv2d(num_channels, ndf, 4, 2, 1, bias=False),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 28×28 → 14×14
-                nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 2),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 14×14 → 7×7
-                nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 4),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 7×7 → 3×3
-                nn.Conv2d(ndf * 4, ndf * 8, 3, 1, 1, bias=False),
-                nn.BatchNorm2d(ndf * 8),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 3×3 → 1×1 (single value per sample)
-                nn.Conv2d(ndf * 8, 1, 3, 1, 0, bias=False),
-                nn.Sigmoid()
-            ])
-        else:  # CIFAR-10 and CelebA
-            layers.extend([
-                nn.Conv2d(num_channels, ndf, 4, 2, 1, bias=False),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 2),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-                nn.BatchNorm2d(ndf * 4),
-                nn.LeakyReLU(0.2, inplace=True)
-            ])
+        size_progression = self.layers_info['size_progression']
+        layers_needed = self.layers_info['layers_needed']
+        
+        current_channels = self.num_channels
+        
+        for layer_idx in range(layers_needed):
+            current_size = size_progression[layer_idx]
+            next_size = size_progression[layer_idx + 1]
             
-            if image_size == 64:  # Additional layer for CelebA
-                layers.extend([
-                    nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-                    nn.BatchNorm2d(ndf * 8),
-                    nn.LeakyReLU(0.2, inplace=True),
-                    nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-                    nn.Sigmoid()
-                ])
-            else:  # CIFAR-10
-                layers.extend([
-                    nn.Conv2d(ndf * 4, 1, 4, 1, 0, bias=False),
-                    nn.Sigmoid()
-                ])
+            # Calculate output channels
+            if layer_idx == 0:
+                # First layer
+                next_channels = self.ndf
+            elif layer_idx == layers_needed - 1:
+                # Final layer outputs 1 channel
+                next_channels = 1
+            else:
+                # Intermediate layers - double channels up to limit
+                next_channels = min(current_channels * 2, self.ndf * 16)
+            
+            # Choose layer configuration based on size transition
+            if next_size == 1:
+                # Final reduction to 1×1
+                if current_size <= 4:
+                    # Direct convolution
+                    layers.extend([
+                        nn.Conv2d(current_channels, next_channels, current_size, 1, 0, bias=False),
+                        nn.Sigmoid()
+                    ])
+                else:
+                    # Use adaptive pooling for robustness
+                    layers.extend([
+                        nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                        nn.AdaptiveAvgPool2d(1),
+                        nn.Sigmoid()
+                    ])
+            else:
+                # Regular conv layer with halving
+                if layer_idx == 0:
+                    # First layer (no batch norm)
+                    layers.extend([
+                        nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                        nn.LeakyReLU(0.2, inplace=True)
+                    ])
+                else:
+                    # Intermediate layer
+                    layers.extend([
+                        nn.Conv2d(current_channels, next_channels, 4, 2, 1, bias=False),
+                        nn.BatchNorm2d(next_channels),
+                        nn.LeakyReLU(0.2, inplace=True)
+                    ])
+            
+            current_channels = next_channels
         
-        self.main = nn.Sequential(*layers)
-        
+        return nn.Sequential(*layers)
+    
     def forward(self, input):
         output = self.main(input)
-        # FIXED: Properly flatten to [batch_size] shape
-        return output.view(input.size(0)).squeeze()
+        # Ensure output is [batch_size] regardless of input size
+        return output.view(input.size(0))
