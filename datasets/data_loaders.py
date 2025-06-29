@@ -12,6 +12,7 @@ class DatasetLoader:
         self.config = config
         self.data_root = "data"
         os.makedirs(self.data_root, exist_ok=True)
+        self.num_workers = os.cpu_count() if os.cpu_count() else 2
     
     def get_dataloader(self, dataset_name, batch_size=None):
         """Get dataloader for specified dataset"""
@@ -34,18 +35,20 @@ class DatasetLoader:
             transforms.Normalize((0.5,), (0.5,))  # Normalize to [-1, 1]
         ])
         
+        print("Loading MNIST dataset...")
         dataset = torchvision.datasets.MNIST(
             root=self.data_root,
             train=True,
             download=True,
             transform=transform
         )
-        
+        print("MNIST dataset loaded successfully.")
+
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=self.num_workers,
             drop_last=True
         )
         
@@ -57,19 +60,19 @@ class DatasetLoader:
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize to [-1, 1]
         ])
-        
+        print("Loading CIFAR-10 dataset...")
         dataset = torchvision.datasets.CIFAR10(
             root=self.data_root,
             train=True,
             download=True,
             transform=transform
         )
-        
+        print("CIFAR-10 dataset loaded successfully.")
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=2,
+            num_workers=self.num_workers,
             drop_last=True
         )
         
@@ -83,7 +86,7 @@ class DatasetLoader:
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize to [-1, 1]
         ])
-        
+        print("Loading CelebA dataset...")
         try:
             dataset = torchvision.datasets.CelebA(
                 root=self.data_root,
@@ -91,6 +94,7 @@ class DatasetLoader:
                 download=True,
                 transform=transform
             )
+            print("CelebA dataset loaded successfully.")
         except:
             # Fallback to a smaller synthetic dataset if CelebA is not available
             print("Warning: CelebA not available, using CIFAR-10 as substitute")
@@ -100,7 +104,7 @@ class DatasetLoader:
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=2,
+            num_workers=self.num_workers,
             drop_last=True
         )
         
