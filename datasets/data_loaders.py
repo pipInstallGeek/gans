@@ -151,7 +151,7 @@ class DatasetLoader:
         ])
         print("Loading FFHQ dataset...")
         
-        ffhq_dir = os.path("/kaggle/input/flickrfaceshq-dataset-ffhq")  
+        ffhq_dir = "/kaggle/input/flickrfaceshq-dataset-ffhq"
         # Create dataset
         dataset = FFHQDataset(ffhq_dir, transform=transform)
         
