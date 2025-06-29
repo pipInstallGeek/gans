@@ -149,47 +149,9 @@ class DatasetLoader:
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize to [-1, 1]
         ])
+        print("Loading FFHQ dataset...")
         
-        # Possible FFHQ directories (try different common structures)
-        possible_ffhq_dirs = [
-            os.path.join(self.data_root, "ffhq"),                    # data/ffhq/
-            os.path.join(self.data_root, "ffhq", "images"),          # data/ffhq/images/
-            os.path.join(self.data_root, "ffhq", "thumbnails128x128"), # Kaggle structure
-            os.path.join(self.data_root, "ffhq", "thumbnails64x64"),   # Kaggle structure
-            os.path.join(self.data_root, "flickr-faces-hq"),        # Alternative name
-            os.path.join(self.data_root, "FFHQ"),                   # Uppercase
-        ]
-        
-        ffhq_dir = None
-        for directory in possible_ffhq_dirs:
-            if os.path.exists(directory):
-                # Check if directory has images
-                test_images = glob.glob(os.path.join(directory, "*.png")) + \
-                            glob.glob(os.path.join(directory, "*.jpg"))
-                if len(test_images) > 100:  # Must have at least 100 images
-                    ffhq_dir = directory
-                    break
-        
-        if ffhq_dir is None:
-            # Print helpful error message
-            print("❌ FFHQ dataset not found!")
-            print("📁 Searched in:")
-            for directory in possible_ffhq_dirs:
-                print(f"   - {directory}")
-            print("\n📥 To download FFHQ from Kaggle:")
-            print("1. Install Kaggle: pip install kaggle")
-            print("2. Download: kaggle datasets download -d lamsimon/ffhq")
-            print("3. Extract to: data/ffhq/")
-            print("4. Run: python main.py --datasets ffhq")
-            
-            raise RuntimeError(
-                "FFHQ dataset not found. Please download from Kaggle:\n"
-                "kaggle datasets download -d lamsimon/ffhq\n"
-                "Then extract to data/ffhq/"
-            )
-        
-        print(f"📁 Using FFHQ data from: {ffhq_dir}")
-        
+        ffhq_dir = os.path("/kaggle/input/flickrfaceshq-dataset-ffhq")  
         # Create dataset
         dataset = FFHQDataset(ffhq_dir, transform=transform)
         
