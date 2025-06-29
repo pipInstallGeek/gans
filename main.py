@@ -17,7 +17,7 @@ def main():
                        default=['dcgan'],          
                        help='Models to compare')
     parser.add_argument('--datasets', nargs='+',
-                       choices=['mnist', 'cifar10', 'celeba'],
+                       choices=['mnist', 'cifar10', 'celeba', 'STL-10'],
                        default=['mnist'],          
                        help='Datasets to use')
     parser.add_argument('--epochs', type=int, default=25, help='Training epochs')

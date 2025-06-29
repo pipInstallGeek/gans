@@ -111,17 +111,14 @@ class DatasetLoader:
         ])
         
         print("Loading CelebA dataset...")
-        try:
-            dataset = torchvision.datasets.CelebA(
+        
+        dataset = torchvision.datasets.CelebA(
                 root=self.data_root,
                 split='train',
                 download=True,
                 transform=transform
             )
-            print("CelebA dataset loaded successfully.")
-        except:
-            print("Warning: CelebA not available, using CIFAR-10 as substitute")
-            return self._get_cifar10_loader(batch_size)
+        print("CelebA dataset loaded successfully.")
         
         dataloader = DataLoader(
             dataset,
