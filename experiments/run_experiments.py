@@ -1,4 +1,4 @@
-# experiments/run_experiments.py
+# experiments/run_experiments.py - CORRECTED VERSION
 import os
 import json
 import pandas as pd
@@ -26,6 +26,57 @@ class ExperimentRunner:
         for dataset_name in dataset_names:
             print(f"\n{'='*50}")
             print(f"Training on {dataset_name.upper()}")
+            print(f"{'='*50}")
+            
+            # Get dataset configuration
+            dataset_config = self.config.get_dataset_config(dataset_name)
+            dataloader = self.dataset_loader.get_dataloader(dataset_name)  # FIXED: not get_eval_dataloader
+            
+            for model_name in model_names:
+                print(f"\n{'-'*30}")
+                print(f"Training {model_name.upper()}")  # FIXED: say "Training" not "Evaluating"
+                print(f"{'-'*30}")
+                
+                try:
+                    # Initialize model (FIXED: removed all evaluation logic)
+                    model_class = get_model_class(model_name)
+                    model = model_class(self.config, dataset_config)
+                    
+                    # Train model (FIXED: actually train the model)
+                    training_time = self.trainer.train_model(
+                        model, dataloader, model_name, dataset_name
+                    )
+                    
+                    # Store results
+                    key = f"{model_name}_{dataset_name}"
+                    self.training_results[key] = {
+                        'training_time': training_time,
+                        'final_g_loss': model.g_losses[-1] if model.g_losses else float('inf'),
+                        'final_d_loss': model.d_losses[-1] if model.d_losses else float('inf'),
+                        'total_epochs': len(model.g_losses)
+                    }
+                    
+                    print(f"Training completed successfully for {model_name} on {dataset_name}")
+                    
+                except Exception as e:
+                    print(f"Training failed for {model_name} on {dataset_name}: {e}")
+                    self.training_results[f"{model_name}_{dataset_name}"] = {
+                        'training_time': 0,
+                        'final_g_loss': float('inf'),
+                        'final_d_loss': float('inf'),
+                        'total_epochs': 0,
+                        'error': str(e)
+                    }
+        
+        # Save training results
+        self.save_training_results()
+    
+    def run_evaluation_experiments(self, model_names, dataset_names):
+        """Run evaluation experiments for all trained models"""
+        
+        for dataset_name in dataset_names:
+            print(f"\n{'='*50}")
+            print(f"Evaluating on {dataset_name.upper()}")
             print(f"{'='*50}")
             
             # Get dataset configuration
@@ -186,55 +237,4 @@ class ExperimentRunner:
             with open(evaluation_file, 'r') as f:
                 self.evaluation_results = json.load(f)
         
-        print("Previous results loaded").get_dataloader(dataset_name)
-            
-        for model_name in model_names:
-            print(f"\n{'-'*30}")
-            print(f"Training {model_name.upper()}")
-            print(f"{'-'*30}")
-            
-            try:
-                # Initialize model
-                model_class = get_model_class(model_name)
-                model = model_class(self.config, dataset_config)
-                
-                # Train model
-                training_time = self.trainer.train_model(
-                    model, dataloader, model_name, dataset_name
-                )
-                
-                # Store results
-                key = f"{model_name}_{dataset_name}"
-                self.training_results[key] = {
-                    'training_time': training_time,
-                    'final_g_loss': model.g_losses[-1] if model.g_losses else float('inf'),
-                    'final_d_loss': model.d_losses[-1] if model.d_losses else float('inf'),
-                    'total_epochs': len(model.g_losses)
-                }
-                
-                print(f"Training completed successfully for {model_name} on {dataset_name}")
-                
-            except Exception as e:
-                print(f"Training failed for {model_name} on {dataset_name}: {e}")
-                self.training_results[f"{model_name}_{dataset_name}"] = {
-                    'training_time': 0,
-                    'final_g_loss': float('inf'),
-                    'final_d_loss': float('inf'),
-                    'total_epochs': 0,
-                    'error': str(e)
-                }
-        
-        # Save training results
-        self.save_training_results()
-    
-    def run_evaluation_experiments(self, model_names, dataset_names):
-        """Run evaluation experiments for all trained models"""
-        
-        for dataset_name in dataset_names:
-            print(f"\n{'='*50}")
-            print(f"Evaluating on {dataset_name.upper()}")
-            print(f"{'='*50}")
-            
-            # Get dataset configuration
-            dataset_config = self.config.get_dataset_config(dataset_name)
-            dataloader = self.dataset_loader
+        print("Previous results loaded")
