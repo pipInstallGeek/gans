@@ -13,6 +13,7 @@ class GANTrainer:
         
     def train_model(self, model, dataloader, model_name, dataset_name):
         """Train a GAN model"""
+        print(f"here is the model: {model}")
         print(f"Training {model_name} on {dataset_name}")
         
         # Training loop
