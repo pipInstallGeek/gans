@@ -1,39 +1,40 @@
-# config.py
 import torch
+import os
+
+# Set GPU memory optimization flags
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 class Config:
-    """Configuration class for GAN comparison experiments"""
+    """GPU-Optimized Configuration for GAN training"""
     
     def __init__(self):
-        # Training parameters
-        self.batch_size = 64
-        self.epochs = 100
-        self.learning_rate_g = 0.0002
+        # GPU-OPTIMIZED TRAINING PARAMETERS
+        self.batch_size = 128         
+        self.epochs = 20              
+        self.learning_rate_g = 0.0002 
         self.learning_rate_d = 0.0002
         self.beta1 = 0.5
         self.beta2 = 0.999
-        self.z_dim = 100
+        self.z_dim = 100              
         
-        # Model specific parameters
-        self.ngf = 64  # Generator feature maps
-        self.ndf = 64  # Discriminator feature maps
+        # FULL MODEL SIZE - GPU can handle complexity
+        self.ngf = 64                 
+        self.ndf = 64                 
         
         # WGAN specific
         self.n_critic = 5
         self.clip_value = 0.01
-        
-        # WGAN-GP specific
         self.lambda_gp = 10
         
-        # Evaluation parameters
-        self.sample_interval = 10  # epochs
+        # GPU-OPTIMIZED EVALUATION (prevent memory issues)
+        self.sample_interval = 5      
         self.eval_interval = 10
-        self.n_eval_samples = 10000
-        self.fid_batch_size = 256
+        self.n_eval_samples = 2000    
+        self.fid_batch_size = 32      
         
         # Dataset parameters
-        self.image_size = 32  # Will be adjusted per dataset
-        self.num_channels = 3  # Will be adjusted per dataset
+        self.image_size = 32
+        self.num_channels = 3
         
         # Paths
         self.results_dir = "results"
@@ -42,11 +43,30 @@ class Config:
         self.metrics_dir = "results/metrics"
         self.plots_dir = "results/plots"
         
-        # Device
+        # GPU DEVICE WITH OPTIMIZATION
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
+        # GPU-specific optimizations
+        if torch.cuda.is_available():
+            # Enable cuDNN optimizations
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.enabled = True
+            
+            # Clear GPU cache on initialization
+            torch.cuda.empty_cache()
+            
+            print(f"GPU: {torch.cuda.get_device_name(0)}")
+            print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            print(f"Batch Size: {self.batch_size} (GPU optimized)")
+            print(f"Model Size: ngf={self.ngf}, ndf={self.ndf} (Full complexity)")
+        else:
+            print("⚠️ No GPU available - falling back to CPU settings")
+            # Emergency CPU fallback
+            self.batch_size = 32
+            self.ngf = 32
+            self.ndf = 32
+        
         # Create directories
-        import os
         for dir_path in [self.results_dir, self.models_dir, self.samples_dir, 
                         self.metrics_dir, self.plots_dir]:
             os.makedirs(dir_path, exist_ok=True)

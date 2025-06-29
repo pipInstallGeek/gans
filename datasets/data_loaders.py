@@ -1,4 +1,3 @@
-# datasets/data_loaders.py
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -6,16 +5,30 @@ from torch.utils.data import DataLoader
 import os
 
 class DatasetLoader:
-    """Unified dataset loader for different datasets"""
+    """GPU-optimized dataset loader"""
     
     def __init__(self, config):
         self.config = config
         self.data_root = "data"
         os.makedirs(self.data_root, exist_ok=True)
-        self.num_workers = os.cpu_count() if os.cpu_count() else 2
+        
+        # GPU-OPTIMIZED DATA LOADING SETTINGS
+        if torch.cuda.is_available():
+            self.num_workers = 4          # MORE WORKERS for GPU (was 2)
+            self.pin_memory = True        # ENABLE PIN MEMORY for faster GPU transfer
+            self.persistent_workers = True # KEEP WORKERS ALIVE
+            self.prefetch_factor = 2      # PREFETCH BATCHES
+        else:
+            # CPU fallback
+            self.num_workers = 2
+            self.pin_memory = False
+            self.persistent_workers = False
+            self.prefetch_factor = 2
+        
+        print(f"📊 Data loading: {self.num_workers} workers, pin_memory={self.pin_memory}")
     
     def get_dataloader(self, dataset_name, batch_size=None):
-        """Get dataloader for specified dataset"""
+        """Get GPU-optimized dataloader"""
         if batch_size is None:
             batch_size = self.config.batch_size
             
@@ -29,7 +42,7 @@ class DatasetLoader:
             raise ValueError(f"Unknown dataset: {dataset_name}")
     
     def _get_mnist_loader(self, batch_size):
-        """Get MNIST dataloader"""
+        """GPU-optimized MNIST dataloader"""
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,))  # Normalize to [-1, 1]
@@ -44,22 +57,28 @@ class DatasetLoader:
         )
         print("MNIST dataset loaded successfully.")
 
+        # GPU-OPTIMIZED DATALOADER
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=self.num_workers,
+            num_workers=self.num_workers,              # More workers for GPU
+            pin_memory=self.pin_memory,                # Faster GPU transfer
+            persistent_workers=self.persistent_workers, # Keep workers alive
+            prefetch_factor=self.prefetch_factor,      # Prefetch batches
             drop_last=True
         )
         
+        print(f"✅ DataLoader created: batch_size={batch_size}, workers={self.num_workers}")
         return dataloader
     
     def _get_cifar10_loader(self, batch_size):
-        """Get CIFAR-10 dataloader"""
+        """GPU-optimized CIFAR-10 dataloader"""
         transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize to [-1, 1]
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+        
         print("Loading CIFAR-10 dataset...")
         dataset = torchvision.datasets.CIFAR10(
             root=self.data_root,
@@ -68,24 +87,29 @@ class DatasetLoader:
             transform=transform
         )
         print("CIFAR-10 dataset loaded successfully.")
+        
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            prefetch_factor=self.prefetch_factor,
             drop_last=True
         )
         
         return dataloader
     
     def _get_celeba_loader(self, batch_size):
-        """Get CelebA dataloader"""
+        """GPU-optimized CelebA dataloader"""
         transform = transforms.Compose([
             transforms.Resize(64),
             transforms.CenterCrop(64),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # Normalize to [-1, 1]
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+        
         print("Loading CelebA dataset...")
         try:
             dataset = torchvision.datasets.CelebA(
@@ -96,7 +120,6 @@ class DatasetLoader:
             )
             print("CelebA dataset loaded successfully.")
         except:
-            # Fallback to a smaller synthetic dataset if CelebA is not available
             print("Warning: CelebA not available, using CIFAR-10 as substitute")
             return self._get_cifar10_loader(batch_size)
         
@@ -105,53 +128,19 @@ class DatasetLoader:
             batch_size=batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            prefetch_factor=self.prefetch_factor,
             drop_last=True
         )
         
         return dataloader
     
-    def get_eval_dataloader(self, dataset_name, batch_size=256):
-        """Get dataloader for evaluation (can use different batch size)"""
+    def get_eval_dataloader(self, dataset_name, batch_size=64):  # Smaller eval batch
+        """Get dataloader for evaluation with smaller batch size"""
         return self.get_dataloader(dataset_name, batch_size)
 
-# Synthetic datasets for visualization
-class Synthetic2DDataset:
-    """Generate 2D synthetic datasets for mode collapse visualization"""
-    
-    @staticmethod
-    def generate_gaussian_mixture(n_samples=10000, n_modes=8):
-        """Generate 2D Gaussian mixture with specified number of modes"""
-        import numpy as np
-        
-        # Create modes in a circle
-        angles = np.linspace(0, 2*np.pi, n_modes, endpoint=False)
-        centers = [(2*np.cos(angle), 2*np.sin(angle)) for angle in angles]
-        
-        # Generate samples
-        samples = []
-        samples_per_mode = n_samples // n_modes
-        
-        for center in centers:
-            mode_samples = np.random.multivariate_normal(
-                center, 
-                [[0.1, 0], [0, 0.1]], 
-                samples_per_mode
-            )
-            samples.append(mode_samples)
-        
-        return np.vstack(samples)
-    
-    @staticmethod
-    def generate_swiss_roll(n_samples=10000):
-        """Generate Swiss roll dataset"""
-        import numpy as np
-        
-        t = 3 * np.pi / 2 * (1 + 2 * np.random.rand(n_samples))
-        x = t * np.cos(t)
-        y = t * np.sin(t)
-        
-        return np.column_stack([x, y])
-
+# Include the get_model_class function
 def get_model_class(model_name):
     """Get model class by name"""
     if model_name == 'vanilla':

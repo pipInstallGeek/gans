@@ -53,55 +53,115 @@ class BaseGAN(ABC):
         pass
     
     def generate_samples(self, n_samples=64, return_tensor=False):
-        """Generate samples from the generator"""
+        """GPU-optimized sample generation with memory management"""
         self.generator.eval()
+        
+        # CLEAR GPU MEMORY before generation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        # Generate in smaller batches to avoid memory issues
+        batch_size = 32  # Smaller batches for GPU memory
+        samples = []
+        
         with torch.no_grad():
-            z = torch.randn(n_samples, self.config.z_dim, device=self.device)
-            samples = self.generator(z)
-            
-            if return_tensor:
-                return samples
-            else:
-                return samples.cpu()
-    
+            for i in range(0, n_samples, batch_size):
+                current_batch_size = min(batch_size, n_samples - i)
+                z = torch.randn(current_batch_size, self.config.z_dim, device=self.device)
+                batch_samples = self.generator(z)
+                
+                if return_tensor:
+                    samples.append(batch_samples.cpu())  # Move to CPU to save GPU memory
+                else:
+                    samples.append(batch_samples.cpu())
+                
+                # Clear GPU memory after each batch
+                del z, batch_samples
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+        
+        # Concatenate all samples
+        all_samples = torch.cat(samples, dim=0)
+        
+        if return_tensor:
+            return all_samples
+        else:
+            return all_samples
+
     def save_models(self, epoch, model_name, dataset_name):
-        """Save generator and discriminator models"""
+        """GPU-optimized model saving with memory management"""
         save_dir = os.path.join(self.config.models_dir, f"{model_name}_{dataset_name}")
         os.makedirs(save_dir, exist_ok=True)
         
-        torch.save({
+        # MOVE MODELS TO CPU before saving to reduce GPU memory usage
+        generator_state = {k: v.cpu() for k, v in self.generator.state_dict().items()}
+        discriminator_state = {k: v.cpu() for k, v in self.discriminator.state_dict().items()}
+        
+        checkpoint = {
             'epoch': epoch,
-            'generator_state_dict': self.generator.state_dict(),
-            'discriminator_state_dict': self.discriminator.state_dict(),
+            'generator_state_dict': generator_state,
+            'discriminator_state_dict': discriminator_state,
             'optimizer_g_state_dict': self.optimizer_g.state_dict(),
             'optimizer_d_state_dict': self.optimizer_d.state_dict(),
             'g_losses': self.g_losses,
             'd_losses': self.d_losses
-        }, os.path.join(save_dir, f'checkpoint_epoch_{epoch}.pth'))
-    
+        }
+        
+        torch.save(checkpoint, os.path.join(save_dir, f'checkpoint_epoch_{epoch}.pth'))
+        
+        # CLEAR GPU MEMORY after saving
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        print(f"💾 Model saved: epoch_{epoch}.pth")
+
     def load_models(self, checkpoint_path):
-        """Load generator and discriminator models"""
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        """GPU-optimized model loading with memory management"""
+        print(f"📥 Loading checkpoint: {os.path.basename(checkpoint_path)}")
+        
+        # CLEAR GPU MEMORY before loading
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        # Load to CPU first
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        
+        # Load state dicts
         self.generator.load_state_dict(checkpoint['generator_state_dict'])
         self.discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+        
+        # Move models to GPU
+        self.generator.to(self.device)
+        self.discriminator.to(self.device)
+        
+        # Load optimizers
         self.optimizer_g.load_state_dict(checkpoint['optimizer_g_state_dict'])
         self.optimizer_d.load_state_dict(checkpoint['optimizer_d_state_dict'])
+        
+        # Load training history
         self.g_losses = checkpoint['g_losses']
         self.d_losses = checkpoint['d_losses']
         
-        return checkpoint['epoch']
+        epoch = checkpoint['epoch']
+        print(f"✅ Checkpoint loaded successfully! Epoch: {epoch}")
+        
+        # CLEAR GPU MEMORY after loading
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        return epoch
 
-def weights_init(m):
-    """Initialize network weights"""
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        if hasattr(m, 'weight'):  # ADD THIS CHECK
-            nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        if hasattr(m, 'weight'):  # ADD THIS CHECK
-            nn.init.normal_(m.weight.data, 1.0, 0.02)
-        if hasattr(m, 'bias'):    # ADD THIS CHECK
-            nn.init.constant_(m.bias.data, 0)
+    def weights_init(m):
+        """Initialize network weights"""
+        classname = m.__class__.__name__
+        if classname.find('Conv') != -1:
+            if hasattr(m, 'weight'):  # ADD THIS CHECK
+                nn.init.normal_(m.weight.data, 0.0, 0.02)
+        elif classname.find('BatchNorm') != -1:
+            if hasattr(m, 'weight'):  # ADD THIS CHECK
+                nn.init.normal_(m.weight.data, 1.0, 0.02)
+            if hasattr(m, 'bias'):    # ADD THIS CHECK
+                nn.init.constant_(m.bias.data, 0)
 
 class ConvGenerator(nn.Module):
     """Convolutional Generator for DCGAN-style architectures"""

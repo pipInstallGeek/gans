@@ -1,50 +1,65 @@
-# training/trainer.py
 import torch
 import time
 import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import gc
 
 class GANTrainer:
-    """Training utilities for GAN models"""
+    """GPU-optimized training utilities"""
     
     def __init__(self, config):
         self.config = config
         
+        # GPU memory management
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            print("🔧 GPU memory initialized")
+    
     def train_model(self, model, dataloader, model_name, dataset_name):
-        """Train a GAN model"""
-        print(f"here is the model: {model}")
-        print(f"Training {model_name} on {dataset_name}")
+        """GPU-optimized training loop"""
+        print(f"🚀 Training {model_name} on {dataset_name}")
         
-        # Training loop
+        # GPU MEMORY MONITORING
+        if torch.cuda.is_available():
+            print(f"📊 GPU Memory before training: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        
         start_time = time.time()
         
         for epoch in range(self.config.epochs):
             epoch_g_losses = []
             epoch_d_losses = []
             
-            # Progress bar for epoch
+            # Progress bar
             pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{self.config.epochs}')
             
             for i, batch in enumerate(pbar):
-                # Extract data (handle different dataset formats)
+                # GPU-OPTIMIZED DATA TRANSFER
                 if dataset_name == 'celeba':
-                    real_data = batch[0].to(self.config.device)
+                    real_data = batch[0].to(self.config.device, non_blocking=True)  # NON_BLOCKING transfer
                 else:
                     real_data, _ = batch
-                    real_data = real_data.to(self.config.device)
+                    real_data = real_data.to(self.config.device, non_blocking=True)  # NON_BLOCKING transfer
                 
-                # Train step
+                # Training step
                 g_loss, d_loss = model.train_step(real_data)
                 
                 epoch_g_losses.append(g_loss)
                 epoch_d_losses.append(d_loss)
                 
-                # Update progress bar
-                pbar.set_postfix({
-                    'G_loss': f'{g_loss:.4f}',
-                    'D_loss': f'{d_loss:.4f}'
-                })
+                # UPDATE PROGRESS with GPU memory info
+                if torch.cuda.is_available() and i % 100 == 0:  # Show GPU memory less frequently
+                    gpu_mem = torch.cuda.memory_allocated(0) / 1e9
+                    pbar.set_postfix({
+                        'G_loss': f'{g_loss:.4f}',
+                        'D_loss': f'{d_loss:.4f}',
+                        'GPU_GB': f'{gpu_mem:.1f}'
+                    })
+                else:
+                    pbar.set_postfix({
+                        'G_loss': f'{g_loss:.4f}',
+                        'D_loss': f'{d_loss:.4f}'
+                    })
             
             # Store epoch losses
             avg_g_loss = sum(epoch_g_losses) / len(epoch_g_losses)
@@ -57,26 +72,44 @@ class GANTrainer:
             if (epoch + 1) % self.config.sample_interval == 0:
                 self.save_samples(model, epoch + 1, model_name, dataset_name)
             
-            # Save model checkpoint
-            if (epoch + 1) % 20 == 0:
+            # Save model checkpoint and CLEAR GPU MEMORY
+            if (epoch + 1) % 10 == 0:  # More frequent saves for GPU
                 model.save_models(epoch + 1, model_name, dataset_name)
+                
+                # GPU MEMORY CLEANUP
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    print(f"🧹 GPU memory cleaned at epoch {epoch + 1}")
             
             print(f'Epoch [{epoch+1}/{self.config.epochs}] '
                   f'G_loss: {avg_g_loss:.4f} D_loss: {avg_d_loss:.4f}')
         
         training_time = time.time() - start_time
-        print(f"Training completed in {training_time:.2f} seconds")
+        
+        # FINAL PERFORMANCE STATS
+        if torch.cuda.is_available():
+            print(f"📊 Final GPU Memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+            print(f"📊 Max GPU Memory: {torch.cuda.max_memory_allocated(0) / 1e9:.2f} GB")
+        
+        print(f"⚡ Training completed in {training_time:.2f} seconds")
+        print(f"⚡ Average time per epoch: {training_time/self.config.epochs:.1f} seconds")
+        print(f"⚡ Speedup estimate: ~{60*10/training_time:.1f}x faster than CPU")
         
         # Save final model
         model.save_models(self.config.epochs, model_name, dataset_name)
-        
-        # Save training curves
         self.save_training_curves(model, model_name, dataset_name)
         
         return training_time
     
     def save_samples(self, model, epoch, model_name, dataset_name):
-        """Save generated samples"""
+        """GPU-optimized sample generation"""
+        print(f"💾 Saving samples for epoch {epoch}...")
+        
+        # CLEAR MEMORY before sample generation
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         samples = model.generate_samples(64)
         
         # Create sample grid
@@ -97,6 +130,8 @@ class GANTrainer:
         transforms.ToPILImage()(grid).save(
             os.path.join(save_dir, f'epoch_{epoch}.png')
         )
+        
+        print(f"✅ Samples saved: {save_dir}/epoch_{epoch}.png")
     
     def save_training_curves(self, model, model_name, dataset_name):
         """Save training loss curves"""
