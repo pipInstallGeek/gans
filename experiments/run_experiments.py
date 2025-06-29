@@ -146,14 +146,14 @@ class ExperimentRunner:
         """Save training results to JSON"""
         results_file = os.path.join(self.config.results_dir, 'training_results.json')
         with open(results_file, 'w') as f:
-            json.dump(self.training_results, f, indent=2)
+            json.dump(self.training_results, f, indent=2, cls=NumpyEncoder)
         print(f"Training results saved to {results_file}")
     
     def save_evaluation_results(self):
         """Save evaluation results to JSON"""
         results_file = os.path.join(self.config.results_dir, 'evaluation_results.json')
         with open(results_file, 'w') as f:
-            json.dump(self.evaluation_results, f, indent=2)
+            json.dump(self.evaluation_results, f, indent=2, cls=NumpyEncoder)
         print(f"Evaluation results saved to {results_file}")
     
     def create_comparison_tables(self):
@@ -238,3 +238,16 @@ class ExperimentRunner:
                 self.evaluation_results = json.load(f)
         
         print("Previous results loaded")
+
+
+import numpy as np
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyEncoder, self).default(obj)
