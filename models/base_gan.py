@@ -151,17 +151,17 @@ class BaseGAN(ABC):
         
         return epoch
 
-    def weights_init(m):
-        """Initialize network weights"""
-        classname = m.__class__.__name__
-        if classname.find('Conv') != -1:
-            if hasattr(m, 'weight'):  # ADD THIS CHECK
-                nn.init.normal_(m.weight.data, 0.0, 0.02)
-        elif classname.find('BatchNorm') != -1:
-            if hasattr(m, 'weight'):  # ADD THIS CHECK
-                nn.init.normal_(m.weight.data, 1.0, 0.02)
-            if hasattr(m, 'bias'):    # ADD THIS CHECK
-                nn.init.constant_(m.bias.data, 0)
+def weights_init(m):
+    """Initialize network weights"""
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        if hasattr(m, 'weight'):  # ADD THIS CHECK
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        if hasattr(m, 'weight'):  # ADD THIS CHECK
+            nn.init.normal_(m.weight.data, 1.0, 0.02)
+        if hasattr(m, 'bias'):    # ADD THIS CHECK
+            nn.init.constant_(m.bias.data, 0)
 
 class ConvGenerator(nn.Module):
     """Convolutional Generator for DCGAN-style architectures"""
