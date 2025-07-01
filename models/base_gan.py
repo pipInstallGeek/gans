@@ -73,10 +73,25 @@ class BaseGAN(ABC):
                 z = torch.randn(current_batch_size, self.config.z_dim, device=self.device)
                 batch_samples = self.generator(z)
                 
-                if return_tensor:
-                    samples.append(batch_samples.cpu())  # Move to CPU to save GPU memory
-                else:
-                    samples.append(batch_samples.cpu())
+                # ✅ ADD RESHAPING LOGIC FOR VANILLA GAN
+                # Check if output is flattened (2D tensor) and needs reshaping
+                if len(batch_samples.shape) == 2:  # [batch, flattened_pixels]
+                    # This is likely Vanilla GAN - reshape to image format
+                    c = self.dataset_config['num_channels']
+                    h = w = self.dataset_config['image_size']
+                    
+                    # Verify the dimensions match
+                    expected_pixels = c * h * w
+                    actual_pixels = batch_samples.shape[1]
+                    
+                    if actual_pixels == expected_pixels:
+                        # Reshape from [batch, pixels] to [batch, channels, height, width]
+                        batch_samples = batch_samples.view(current_batch_size, c, h, w)
+                        print(f"🔍 Reshaped {actual_pixels} pixels to [{current_batch_size}, {c}, {h}, {w}]")
+                    else:
+                        print(f"⚠️ Warning: Expected {expected_pixels} pixels, got {actual_pixels}")
+                
+                samples.append(batch_samples.cpu())  # Move to CPU to save GPU memory
                 
                 # Clear GPU memory after each batch
                 del z, batch_samples
@@ -86,10 +101,9 @@ class BaseGAN(ABC):
         # Concatenate all samples
         all_samples = torch.cat(samples, dim=0)
         
-        if return_tensor:
-            return all_samples
-        else:
-            return all_samples
+        print(f"🔍 Final generate_samples output shape: {all_samples.shape}")
+        
+        return all_samples
     
     def save_models(self, epoch, model_name, dataset_name):
         """GPU-optimized model saving with memory management"""
