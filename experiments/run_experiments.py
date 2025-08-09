@@ -1,11 +1,9 @@
-# experiments/run_experiments.py - CORRECTED VERSION
 import os
 import json
 import pandas as pd
 from datasets.data_loaders import DatasetLoader, get_model_class
 from training.trainer import GANTrainer
 from evaluation.metrics import GANEvaluator
-
 
 class ExperimentRunner:
     """Main experiment runner"""
