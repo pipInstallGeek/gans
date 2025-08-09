@@ -4,26 +4,26 @@ import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import gc
+from utils.device_manager import DeviceManager
 
 class GANTrainer:
     """GPU-optimized training utilities"""
-    
+
     def __init__(self, config):
         self.config = config
-        
-        # GPU memory management
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        self.device_manager = DeviceManager(getattr(config, 'device', None))
+
+        self.device_manager.empty_cache()
+        if self.device_manager.is_cuda():
             print("🔧 GPU memory initialized")
     
     def train_model(self, model, dataloader, model_name, dataset_name):
         """GPU-optimized training loop"""
         print(f"🚀 Training {model_name} on {dataset_name}")
-        
-        # GPU MEMORY MONITORING
-        if torch.cuda.is_available():
+
+        if self.device_manager.is_cuda():
             print(f"📊 GPU Memory before training: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
-        
+
         start_time = time.time()
         
         for epoch in range(self.config.epochs):
@@ -48,7 +48,7 @@ class GANTrainer:
                 epoch_d_losses.append(d_loss)
                 
                 # UPDATE PROGRESS with GPU memory info
-                if torch.cuda.is_available() and i % 100 == 0:  # Show GPU memory less frequently
+                if self.device_manager.is_cuda() and i % 100 == 0:  # Show GPU memory less frequently
                     gpu_mem = torch.cuda.memory_allocated(0) / 1e9
                     pbar.set_postfix({
                         'G_loss': f'{g_loss:.4f}',
@@ -75,11 +75,11 @@ class GANTrainer:
             # Save model checkpoint and CLEAR GPU MEMORY
             if (epoch + 1) % 10 == 0:  # More frequent saves for GPU
                 model.save_models(epoch + 1, model_name, dataset_name)
-                
+
                 # GPU MEMORY CLEANUP
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    gc.collect()
+                self.device_manager.empty_cache()
+                gc.collect()
+                if self.device_manager.is_cuda():
                     print(f"GPU memory cleaned at epoch {epoch + 1}")
             
             print(f'Epoch [{epoch+1}/{self.config.epochs}] '
@@ -88,7 +88,7 @@ class GANTrainer:
         training_time = time.time() - start_time
         
         # FINAL PERFORMANCE STATS
-        if torch.cuda.is_available():
+        if self.device_manager.is_cuda():
             print(f"Final GPU Memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
             print(f"Max GPU Memory: {torch.cuda.max_memory_allocated(0) / 1e9:.2f} GB")
         
@@ -103,32 +103,31 @@ class GANTrainer:
     def save_samples(self, model, epoch, model_name, dataset_name):
         """GPU-optimized sample generation"""
         print(f"Saving samples for epoch {epoch}...")
-        
+
         # CLEAR MEMORY before sample generation
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
+        self.device_manager.empty_cache()
+
         samples = model.generate_samples(64)
-        
+
         # Create sample grid
         from torchvision.utils import make_grid
         import torchvision.transforms as transforms
-        
+
         # Denormalize samples (from [-1, 1] to [0, 1])
         samples = (samples + 1) / 2.0
         samples = torch.clamp(samples, 0, 1)
-        
+
         # Create grid
         grid = make_grid(samples, nrow=8, padding=2, normalize=False)
-        
+
         # Save image
         save_dir = os.path.join(self.config.samples_dir, f"{model_name}_{dataset_name}")
         os.makedirs(save_dir, exist_ok=True)
-        
+
         transforms.ToPILImage()(grid).save(
             os.path.join(save_dir, f'epoch_{epoch}.png')
         )
-        
+
         print(f"✅ Samples saved: {save_dir}/epoch_{epoch}.png")
     
     def save_training_curves(self, model, model_name, dataset_name):

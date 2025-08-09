@@ -13,11 +13,11 @@ def main():
                        default='all', help='Mode to run')
     
     parser.add_argument('--models', nargs='+', 
-                       choices=['vanilla', 'dcgan', 'wgan', 'wgan_gp'], 
+                       choices=['vanilla', 'dcgan', 'wgan', 'sn_gan'], 
                        default=['dcgan'],          
                        help='Models to compare')
     parser.add_argument('--datasets', nargs='+',
-                       choices=['mnist', 'cifar10', 'celeba', 'ffhq'],
+                       choices=['mnist', 'cifar10', 'celeba'],
                        default=['mnist'],          
                        help='Datasets to use')
     parser.add_argument('--epochs', type=int, default=25, help='Training epochs')
