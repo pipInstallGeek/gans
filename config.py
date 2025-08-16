@@ -29,13 +29,13 @@ class Config:
         # GPU-OPTIMIZED EVALUATION (prevent memory issues)
         self.sample_interval = 5      
         self.eval_interval = 10
-        self.n_eval_samples = 2000    
+        self.n_eval_samples = 10000
         self.fid_batch_size = 32      
         
         # Dataset parameters
         self.image_size = 32
         self.num_channels = 3
-        
+        self.calculate_mode_metrics = True
         # Paths
         self.results_dir = "results"
         self.models_dir = "results/models"

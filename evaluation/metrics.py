@@ -1,20 +1,23 @@
 import torch
 import numpy as np
 import warnings
-from typing import Dict, Tuple, Optional, List
-from torchmetrics.image.fid import FrechetInceptionDistance
-from torchmetrics.image.inception import InceptionScore
+import os
+import tempfile
+import traceback
+from typing import Dict, Optional
 from torch_fidelity import calculate_metrics
-from cleanfid import fid as cleanfid
-import prdc
-from pytorch_gan_metrics import get_inception_score, get_fid, get_inception_score_and_fid
-from pytorch_gan_metrics.core import get_inception_feature, calculate_frechet_distance
-from scipy import linalg
+from torchvision.utils import save_image
+from tqdm import tqdm
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+import prdc
 from utils.device_manager import DeviceManager
 
 warnings.filterwarnings("ignore")
+
+def clear_cache():
+    """Helper function to clear GPU memory cache"""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 class StandardGANMetrics:
@@ -27,123 +30,41 @@ class StandardGANMetrics:
         self.device_manager = device_manager
         self.device = device_manager.device
         
-        # Initialize standard metric calculators
-        self.metric_calculators = {}
-        
-        # torchmetrics FID - most reliable implementation
-        self.fid_metric = FrechetInceptionDistance(
-            feature=2048,  # Inception feature dimension
-            reset_real_features=True,
-            normalize=True
-        ).to(self.device)
-        
-        # torchmetrics IS
-        self.is_metric = InceptionScore(
-            feature=2048,
-            splits=10,
-            normalize=True
-        ).to(self.device)
-        
-        print("✅ Using torchmetrics for FID and IS (recommended)")
-        
         print("="*80)
         print("STANDARD GAN METRICS INITIALIZED")
-        print("✅ All metric libraries loaded successfully")
+        print("Using torch-fidelity for all primary metrics (FID, IS, KID)")
         print("="*80)
     
-    def calculate_fid_torchmetrics(self, real_images, fake_images):
+    def calculate_metrics(self, real_images, fake_images):
         """
-        Calculate FID using torchmetrics (most reliable)
-        """
-        print("📊 Calculating FID with torchmetrics...")
-        
-        try:
-            # Reset metric
-            self.fid_metric.reset()
-            
-            # Process in batches to avoid memory issues
-            batch_size = 50
-            
-            # Update with real images
-            for i in range(0, len(real_images), batch_size):
-                batch = real_images[i:i+batch_size].to(self.device)
-                if batch.size(1) == 1:  # Convert grayscale to RGB
-                    batch = batch.repeat(1, 3, 1, 1)
-                self.fid_metric.update(batch, real=True)
-            
-            # Update with fake images
-            for i in range(0, len(fake_images), batch_size):
-                batch = fake_images[i:i+batch_size].to(self.device)
-                if batch.size(1) == 1:  # Convert grayscale to RGB
-                    batch = batch.repeat(1, 3, 1, 1)
-                self.fid_metric.update(batch, real=False)
-            
-            # Compute FID
-            fid_score = self.fid_metric.compute().item()
-            print(f"✅ FID (torchmetrics): {fid_score:.2f}")
-            
-            return fid_score
-            
-        except Exception as e:
-            print(f"❌ FID calculation failed: {e}")
-            return None
-    
-    def calculate_is_torchmetrics(self, fake_images):
-        """
-        Calculate IS using torchmetrics
-        """
-        print("📊 Calculating IS with torchmetrics...")
-        
-        try:
-            # Reset metric
-            self.is_metric.reset()
-            
-            # Process in batches
-            batch_size = 50
-            
-            for i in range(0, len(fake_images), batch_size):
-                batch = fake_images[i:i+batch_size].to(self.device)
-                if batch.size(1) == 1:  # Convert grayscale to RGB
-                    batch = batch.repeat(1, 3, 1, 1)
-                self.is_metric.update(batch)
-            
-            # Compute IS
-            is_mean, is_std = self.is_metric.compute()
-            print(f"✅ IS (torchmetrics): {is_mean:.2f} ± {is_std:.2f}")
-            
-            return is_mean.item(), is_std.item()
-            
-        except Exception as e:
-            print(f"❌ IS calculation failed: {e}")
-            return None, None
-    
-    def calculate_metrics_torch_fidelity(self, real_images, fake_images):
-        """
-        Calculate multiple metrics using torch-fidelity
-        Very reliable library used in many papers
+        Calculate all primary metrics (FID, IS, KID) using torch-fidelity
         """
         print("📊 Calculating metrics with torch-fidelity...")
         
         try:
-            # Save images temporarily for torch-fidelity
-            import tempfile
-            import os
-            from torchvision.utils import save_image
-            
             with tempfile.TemporaryDirectory() as tmpdir:
                 real_dir = os.path.join(tmpdir, 'real')
                 fake_dir = os.path.join(tmpdir, 'fake')
                 os.makedirs(real_dir)
                 os.makedirs(fake_dir)
                 
-                # Save images
-                for i in range(min(1000, len(real_images))):
-                    save_image(real_images[i], os.path.join(real_dir, f'{i}.png'))
+                # Save images with progress bar
+                print("Saving images for metrics calculation...")
+                with tqdm(total=min(1000, len(real_images)), desc="Saving real images") as pbar:
+                    for i in range(min(1000, len(real_images))):
+                        save_image(real_images[i], os.path.join(real_dir, f'{i}.png'))
+                        pbar.update(1)
+                        
+                with tqdm(total=min(1000, len(fake_images)), desc="Saving fake images") as pbar:
+                    for i in range(min(1000, len(fake_images))):
+                        save_image(fake_images[i], os.path.join(fake_dir, f'{i}.png'))
+                        pbar.update(1)
                 
-                for i in range(min(1000, len(fake_images))):
-                    save_image(fake_images[i], os.path.join(fake_dir, f'{i}.png'))
+                # Clear memory
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
                 
-                # Calculate metrics
+                # Calculate all metrics at once
+                print("Computing metrics (this may take a while)...")
                 metrics = calculate_metrics(
                     input1=real_dir,
                     input2=fake_dir,
@@ -151,41 +72,22 @@ class StandardGANMetrics:
                     isc=True,  # Inception Score
                     fid=True,  # FID
                     kid=True,  # Kernel Inception Distance
-                    verbose=False
+                    verbose=True
                 )
                 
-                print(f"✅ torch-fidelity metrics calculated")
+                # Print results
+                print(f"\n✅ Metrics calculated:")
+                print(f"  ⊛ FID: {metrics.get('frechet_inception_distance', 'N/A'):.4f}")
+                print(f"  ⊛ IS: {metrics.get('inception_score_mean', 'N/A'):.4f} ± {metrics.get('inception_score_std', 'N/A'):.4f}")
+                print(f"  ⊛ KID: {metrics.get('kernel_inception_distance', 'N/A'):.6f}")
+                
                 return metrics
                 
         except Exception as e:
-            print(f"❌ torch-fidelity failed: {e}")
+            print(f"❌ Metrics calculation failed: {e}")
+            import traceback
+            traceback.print_exc()
             return {}
-    
-    def calculate_cleanfid(self, real_images, fake_images):
-        """
-        Calculate FID using clean-fid (addresses limitations of standard FID)
-        """
-        print("📊 Calculating Clean-FID...")
-        
-        try:
-            # clean-fid requires numpy arrays
-            real_np = real_images.cpu().numpy()
-            fake_np = fake_images.cpu().numpy()
-            
-            # Transpose to (N, H, W, C) format
-            if real_np.shape[1] in [1, 3]:
-                real_np = np.transpose(real_np, (0, 2, 3, 1))
-                fake_np = np.transpose(fake_np, (0, 2, 3, 1))
-            
-            # Calculate clean-fid
-            fid_score = cleanfid.compute_fid(fake_np, real_np)
-            print(f"✅ Clean-FID: {fid_score:.2f}")
-            
-            return fid_score
-            
-        except Exception as e:
-            print(f"❌ Clean-FID failed: {e}")
-            return None
     
     def calculate_prdc_metrics(self, real_features, fake_features):
         """
@@ -283,8 +185,7 @@ class StandardGANMetrics:
 
 class GANEvaluator:
     """
-    Main evaluator using standard libraries
-    Combines multiple established implementations for robustness
+    Main evaluator using torch-fidelity for all primary metrics
     """
     
     def __init__(self, config):
@@ -293,19 +194,19 @@ class GANEvaluator:
         self.metrics = StandardGANMetrics(self.device_manager)
         
         print("\n" + "="*80)
-        print("ENHANCED GAN EVALUATOR WITH STANDARD LIBRARIES")
-        print("Using established, peer-reviewed implementations")
+        print(" GAN EVALUATOR WITH TORCH-FIDELITY")
+        print("Using research-standard implementation for all metrics")
         print("="*80 + "\n")
     
     def evaluate_model(self, model, dataloader, dataset_name, model_name):
         """
-        Comprehensive evaluation using standard libraries
+        Comprehensive evaluation using torch-fidelity for all primary metrics
         """
         results = {}
         
         print(f"\n{'='*80}")
         print(f"EVALUATING {model_name} on {dataset_name}")
-        print(f"Using standard library implementations")
+        print(f"Using torch-fidelity for all primary metrics")
         print(f"{'='*80}")
         
         try:
@@ -330,136 +231,119 @@ class GANEvaluator:
             
             print(f"✅ Collected {real_samples.size(0)} real, {fake_samples.size(0)} fake samples")
             
-            # ========== PRIMARY METRICS (YOUR PAPER) ==========
+            # ========== CALCULATE ALL PRIMARY METRICS AT ONCE ==========
             print(f"\n{'='*50}")
-            print("PRIMARY METRICS (FID & IS from your paper)")
+            print("CALCULATING PRIMARY METRICS (FID, IS, KID)")
             print(f"{'='*50}")
             
-            # 1. FID - Try multiple implementations for robustness
-            fid_scores = {}
+            # Calculate all metrics using torch-fidelity
+            metrics_results = self.metrics.calculate_metrics(real_samples, fake_samples)
             
-            # Calculate FID with torchmetrics
-            fid_tm = self.metrics.calculate_fid_torchmetrics(real_samples, fake_samples)
-            if fid_tm is not None:
-                fid_scores['torchmetrics'] = fid_tm
-            
-            # Calculate FID with torch-fidelity
-            tf_metrics = self.metrics.calculate_metrics_torch_fidelity(real_samples, fake_samples)
-            if 'frechet_inception_distance' in tf_metrics:
-                fid_scores['torch_fidelity'] = tf_metrics['frechet_inception_distance']
-            
-            # Calculate FID with clean-fid
-            fid_clean = self.metrics.calculate_cleanfid(real_samples, fake_samples)
-            if fid_clean is not None:
-                fid_scores['clean_fid'] = fid_clean
-            
-            # Calculate FID with pytorch-gan-metrics
-            try:
-                fid_pgm = get_fid(fake_samples, real_samples)
-                fid_scores['pytorch_gan_metrics'] = fid_pgm
-            except Exception as e:
-                print(f"⚠️ pytorch-gan-metrics FID failed: {e}")
-            
-            # Use mean of available FID scores for robustness
-            if fid_scores:
-                results['fid'] = np.mean(list(fid_scores.values()))
-                results['fid_scores'] = fid_scores
-                print(f"\n📊 FID (averaged): {results['fid']:.2f}")
-                print(f"   Individual scores: {fid_scores}")
-            else:
-                results['fid'] = float('inf')
-            
-            # 2. IS - Inception Score
-            # Calculate IS with torchmetrics
-            is_mean, is_std = self.metrics.calculate_is_torchmetrics(fake_samples)
-            if is_mean is not None:
-                results['is_mean'] = is_mean
-                results['is_std'] = is_std
-            else:
-                # Try with pytorch-gan-metrics as backup
-                try:
-                    is_score = get_inception_score(fake_samples)
-                    results['is_mean'] = is_score
-                    results['is_std'] = 0.0
-                except Exception as e:
-                    print(f"⚠️ pytorch-gan-metrics IS failed: {e}")
-                    results['is_mean'] = 0.0
-                    results['is_std'] = 0.0
-            
+            # Store metrics in results
+            if metrics_results:
+                results['fid'] = metrics_results.get('frechet_inception_distance', float('inf'))
+                results['is_mean'] = metrics_results.get('inception_score_mean', 0.0)
+                results['is_std'] = metrics_results.get('inception_score_std', 0.0)
+                results['kid'] = metrics_results.get('kernel_inception_distance', 0.0)
             # ========== MODE METRICS ==========
-            print(f"\n{'='*50}")
-            print("MODE COVERAGE & COLLAPSE METRICS")
-            print(f"{'='*50}")
-            
-            # Extract features for advanced metrics
-            # Use InceptionV3 features
-            from torchvision.models import inception_v3
-            import torch.nn as nn
-            
-            inception = inception_v3(pretrained=True)
-            inception.fc = nn.Identity()  # type: ignore
-            inception.eval().to(self.device_manager.device)
-            
-            with torch.no_grad():
-                # Get features
-                real_features = []
-                fake_features = []
+            if getattr(self.config, 'calculate_mode_metrics', True):
+                print(f"\n{'='*50}")
+                print("MODE COVERAGE & COLLAPSE METRICS")
+                print(f"{'='*50}")
                 
-                for i in range(0, len(real_samples), 32):
-                    batch = real_samples[i:i+32].to(self.device_manager.device)
-                    if batch.size(1) == 1:
-                        batch = batch.repeat(1, 3, 1, 1)
-                    batch = torch.nn.functional.interpolate(batch, size=(299, 299))
-                    features = inception(batch).cpu().numpy()
-                    real_features.append(features)
+                # Extract features for advanced metrics
+                # Use InceptionV3 features
+                from torchvision.models import inception_v3
+                import torch.nn as nn
                 
-                for i in range(0, len(fake_samples), 32):
-                    batch = fake_samples[i:i+32].to(self.device_manager.device)
-                    if batch.size(1) == 1:
-                        batch = batch.repeat(1, 3, 1, 1)
-                    batch = torch.nn.functional.interpolate(batch, size=(299, 299))
-                    features = inception(batch).cpu().numpy()
-                    fake_features.append(features)
+                inception = inception_v3(pretrained=True)
                 
-                real_features = np.concatenate(real_features)
-                fake_features = np.concatenate(fake_features)
-            
-            # Calculate mode metrics
-            mode_metrics = self.metrics.calculate_mode_metrics(
-                real_features, fake_features, 
-                n_modes=getattr(self.config, 'n_modes', 10)
-            )
-            results.update(mode_metrics)
-            
-            # PRDC metrics
-            prdc_metrics = self.metrics.calculate_prdc_metrics(
-                real_features, fake_features
-            )
-            results.update(prdc_metrics)
+                # Properly replace the fc layer with a compatible layer
+                in_features = inception.fc.in_features
+                inception.fc = nn.Linear(in_features, in_features)
+                # Initialize with identity-like weights
+                with torch.no_grad():
+                    inception.fc.weight.fill_(0)
+                    # Set diagonal to 1 to mimic identity function
+                    for i in range(in_features):
+                        inception.fc.weight[i, i] = 1
+                    inception.fc.bias.fill_(0)
+                    
+                inception.eval().to(self.device_manager.device)
+                
+                with torch.no_grad():
+                    # Get features with progress bar
+                    from tqdm import tqdm
+                    
+                    real_features = []
+                    fake_features = []
+                    
+                    print("Extracting inception features for real images...")
+                    for i in tqdm(range(0, len(real_samples), 32), desc="Real Features"):
+                        batch = real_samples[i:i+32].to(self.device_manager.device)
+                        if batch.size(1) == 1:
+                            batch = batch.repeat(1, 3, 1, 1)
+                        batch = torch.nn.functional.interpolate(batch, size=(299, 299))
+                        features = inception(batch).cpu().numpy()
+                        real_features.append(features)
+                        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    
+                    print("Extracting inception features for fake images...")
+                    for i in tqdm(range(0, len(fake_samples), 32), desc="Fake Features"):
+                        batch = fake_samples[i:i+32].to(self.device_manager.device)
+                        if batch.size(1) == 1:
+                            batch = batch.repeat(1, 3, 1, 1)
+                        batch = torch.nn.functional.interpolate(batch, size=(299, 299))
+                        features = inception(batch).cpu().numpy()
+                        fake_features.append(features)
+                        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    
+                    real_features = np.concatenate(real_features)
+                    fake_features = np.concatenate(fake_features)
+                
+                # Calculate mode metrics
+                mode_metrics = self.metrics.calculate_mode_metrics(
+                    real_features, fake_features, 
+                    n_modes=getattr(self.config, 'n_modes', 10)
+                )
+                results.update(mode_metrics)
+                
+                # PRDC metrics if requested
+                if getattr(self.config, 'calculate_prdc', True):
+                    prdc_metrics = self.metrics.calculate_prdc_metrics(
+                        real_features, fake_features
+                    )
+                    results.update(prdc_metrics)
             
             # ========== SUMMARY ==========
             print(f"\n{'='*80}")
             print(f"EVALUATION SUMMARY for {model_name}")
             print(f"{'='*80}")
-            print(f"📊 FID: {results.get('fid', 'N/A'):.2f} (lower is better)")
-            print(f"📊 IS: {results.get('is_mean', 0):.2f} ± {results.get('is_std', 0):.2f} (higher is better)")
-            print(f"📊 Mode Coverage: {results.get('mode_coverage', 0):.2%}")
-            print(f"📊 Mode Collapse Score: {results.get('mode_collapse_score', 1):.3f}")
+            print(f"📊 FID: {results.get('fid', float('inf')):.4f} (lower is better)")
+            print(f"📊 IS: {results.get('is_mean', 0):.4f} ± {results.get('is_std', 0):.4f} (higher is better)")
+            print(f"📊 KID: {results.get('kid', 0):.6f} (lower is better)")
+            
+            if 'mode_coverage' in results:
+                print(f"📊 Mode Coverage: {results.get('mode_coverage', 0):.2%}")
+                print(f"📊 Mode Collapse Score: {results.get('mode_collapse_score', 1):.4f}")
             
             if 'precision' in results:
-                print(f"📊 Precision: {results['precision']:.3f}")
-                print(f"📊 Recall: {results['recall']:.3f}")
-                print(f"📊 Density: {results['density']:.3f}")
-                print(f"📊 Coverage: {results['coverage']:.3f}")
+                print(f"📊 Precision: {results['precision']:.4f}")
+                print(f"📊 Recall: {results['recall']:.4f}")
+                print(f"📊 Density: {results['density']:.4f}")
+                print(f"📊 Coverage: {results['coverage']:.4f}")
             
             return results
             
         except Exception as e:
             print(f"❌ Evaluation failed: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'fid': float('inf'),
                 'is_mean': 0.0,
                 'is_std': 0.0,
+                'kid': 0.0,
                 'error': str(e)
             }
 
