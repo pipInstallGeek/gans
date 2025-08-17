@@ -5,6 +5,7 @@ from datasets.data_loaders import DatasetLoader, get_model_class
 from training.trainer import GANTrainer
 from evaluation.metrics import GANEvaluator
 
+
 class ExperimentRunner:
     """Main experiment runner"""
 
@@ -28,19 +29,19 @@ class ExperimentRunner:
 
             # Get dataset configuration
             dataset_config = self.config.get_dataset_config(dataset_name)
-            dataloader = self.dataset_loader.get_dataloader(dataset_name)  # FIXED: not get_eval_dataloader
+            dataloader = self.dataset_loader.get_dataloader(dataset_name)
 
             for model_name in model_names:
                 print(f"\n{'-' * 30}")
-                print(f"Training {model_name.upper()}")  # FIXED: say "Training" not "Evaluating"
+                print(f"Training {model_name.upper()}")
                 print(f"{'-' * 30}")
 
                 try:
-                    # Initialize model (FIXED: removed all evaluation logic)
+                    # Initialize model
                     model_class = get_model_class(model_name)
                     model = model_class(self.config, dataset_config)
 
-                    # Train model (FIXED: actually train the model)
+                    # Train model
                     training_time = self.trainer.train_model(
                         model, dataloader, model_name, dataset_name
                     )
@@ -122,11 +123,19 @@ class ExperimentRunner:
                     key = f"{model_name}_{dataset_name}"
                     self.evaluation_results[key] = results
 
-                    print(f"Evaluation completed for {model_name} on {dataset_name}")
+                    # Print actual metrics that exist
                     print(f"FID: {results.get('fid', 'N/A'):.2f}")
                     print(f"IS: {results.get('is_mean', 'N/A'):.2f} ± {results.get('is_std', 'N/A'):.2f}")
+                    print(f"KID: {results.get('kid_mean', 'N/A'):.6f} ± {results.get('kid_std', 'N/A'):.6f}")
                     print(f"Mode Coverage: {results.get('mode_coverage', 'N/A'):.3f}")
-                    print(f"Stability Score: {results.get('stability_score', 'N/A'):.2f}")
+                    print(f"Mode Collapse Score: {results.get('mode_collapse_score', 'N/A'):.3f}")
+
+                    # PRDC metrics if available
+                    if 'precision' in results:
+                        print(f"Precision: {results['precision']:.3f}")
+                        print(f"Recall: {results['recall']:.3f}")
+                        print(f"Density: {results['density']:.3f}")
+                        print(f"Coverage: {results['coverage']:.3f}")
 
                 except Exception as e:
                     print(f"Evaluation failed for {model_name} on {dataset_name}: {e}")
@@ -155,7 +164,7 @@ class ExperimentRunner:
         print(f"Evaluation results saved to {results_file}")
 
     def create_comparison_tables(self):
-        """Create comparison tables for thesis"""
+        """Create comparison tables for thesis using ACTUAL metrics"""
 
         # Prepare data for DataFrame
         data = []
@@ -175,12 +184,22 @@ class ExperimentRunner:
                 'FID ↓': results.get('fid', float('inf')),
                 'IS ↑': results.get('is_mean', 0),
                 'IS_std': results.get('is_std', 0),
-                'Mode Coverage': results.get('mode_coverage', 0),
-                'Stability Score ↑': results.get('stability_score', 0),
+                'KID_mean ↓': results.get('kid_mean', float('inf')),
+                'KID_std': results.get('kid_std', 0),
+                'Mode Coverage ↑': results.get('mode_coverage', 0),
+                'Mode Collapse ↓': results.get('mode_collapse_score', 1),
                 'Training Time (min)': training_info.get('training_time', 0) / 60,
                 'Final G Loss': training_info.get('final_g_loss', float('inf')),
                 'Final D Loss': training_info.get('final_d_loss', float('inf'))
             }
+
+            # Add PRDC metrics if available
+            if 'precision' in results:
+                row['Precision ↑'] = results['precision']
+                row['Recall ↑'] = results['recall']
+                row['Density ↑'] = results['density']
+                row['Coverage ↑'] = results['coverage']
+
             data.append(row)
 
         if not data:
@@ -199,9 +218,15 @@ class ExperimentRunner:
             dataset_df = dataset_df.drop('Dataset', axis=1)
 
             # Round numerical values
-            numerical_cols = ['FID ↓', 'IS ↑', 'IS_std', 'Mode Coverage',
-                              'Stability Score ↑', 'Training Time (min)',
+            numerical_cols = ['FID ↓', 'IS ↑', 'IS_std', 'KID_mean ↓', 'KID_std',
+                              'Mode Coverage ↑', 'Mode Collapse ↓', 'Training Time (min)',
                               'Final G Loss', 'Final D Loss']
+
+            # Add PRDC columns if they exist
+            prdc_cols = ['Precision ↑', 'Recall ↑', 'Density ↑', 'Coverage ↑']
+            for col in prdc_cols:
+                if col in dataset_df.columns:
+                    numerical_cols.append(col)
 
             for col in numerical_cols:
                 if col in dataset_df.columns:
