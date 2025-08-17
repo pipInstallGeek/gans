@@ -82,7 +82,6 @@ class BaseGAN(ABC):
                 del z, batch_samples
                 self.device_manager.empty_cache()
         all_samples = torch.cat(samples, dim=0)
-        print(f"🔍 Final generate_samples output shape: {all_samples.shape}")
         return all_samples
 
     def save_models(self, epoch, model_name, dataset_name):

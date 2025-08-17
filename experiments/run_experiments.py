@@ -111,7 +111,6 @@ class ExperimentRunner:
                     latest_checkpoint = sorted(checkpoint_files)[-1]
                     checkpoint_path = os.path.join(model_dir, latest_checkpoint)
 
-                    print(f"Loading checkpoint: {latest_checkpoint}")
                     model.load_models(checkpoint_path)
 
                     # Evaluate model

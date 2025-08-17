@@ -70,7 +70,7 @@ class StandardGANMetrics:
                 return metrics
 
         except Exception as e:
-            print(f"❌ Metrics calculation failed: {e}")
+            print(f"Metrics calculation failed: {e}")
             traceback.print_exc()
             return {}
 
@@ -80,7 +80,7 @@ class StandardGANMetrics:
         """
         try:
             # Limit samples for computational efficiency
-            n_samples = min(5000, len(real_features), len(fake_features))
+            n_samples = len(real_features)
             real_features = real_features[:n_samples]
             fake_features = fake_features[:n_samples]
 
@@ -94,7 +94,7 @@ class StandardGANMetrics:
             return metrics
 
         except Exception as e:
-            print(f"❌ PRDC metrics failed: {e}")
+            print(f"PRDC metrics failed: {e}")
             return {}
 
     def calculate_mode_metrics(self, real_features, fake_features, n_modes=10):
@@ -145,7 +145,7 @@ class StandardGANMetrics:
             }
 
         except Exception as e:
-            print(f"❌ Mode metrics failed: {e}")
+            print(f"Mode metrics failed: {e}")
             return {
                 'mode_coverage': 0.0,
                 'modes_covered': 0,
@@ -164,10 +164,6 @@ class GANEvaluator:
         self.device_manager = DeviceManager(getattr(config, 'device', None))
         self.metrics = StandardGANMetrics(self.device_manager)
 
-        print("=" * 80)
-        print(" GAN EVALUATOR WITH TORCH-FIDELITY")
-        print("Using research-standard implementation for all metrics")
-        print("=" * 80)
 
     def evaluate_model(self, model, dataloader, dataset_name, model_name):
         """
@@ -177,13 +173,12 @@ class GANEvaluator:
 
         print(f"\n{'=' * 80}")
         print(f"EVALUATING {model_name} on {dataset_name}")
-        print(f"Using torch-fidelity for all primary metrics")
         print(f"{'=' * 80}")
 
         try:
             # Generate samples
             n_samples = getattr(self.config, 'n_eval_samples', 5000)
-            print(f"\n📦 Generating {n_samples} samples...")
+            print(f"\n Generating {n_samples} samples...")
 
             fake_samples = model.generate_samples(n_samples, return_tensor=True).cpu()
 
@@ -279,11 +274,6 @@ class GANEvaluator:
                 )
                 results.update(mode_metrics)
 
-                # Print mode metrics results
-                print(
-                    f"✅ Mode Coverage: {results.get('mode_coverage', 0):.2%} ({results.get('modes_covered', 0)}/{results.get('total_modes', 10)})")
-                print(f"✅ Mode Collapse Score: {results.get('mode_collapse_score', 1):.3f}")
-
                 # PRDC metrics if requested
                 if getattr(self.config, 'calculate_prdc', True):
                     print("📊 Calculating Precision, Recall, Density, Coverage...")
@@ -292,12 +282,7 @@ class GANEvaluator:
                     )
                     results.update(prdc_metrics)
 
-                    # Print PRDC results
-                    if prdc_metrics:
-                        print(f"✅ Precision: {prdc_metrics['precision']:.3f}")
-                        print(f"✅ Recall: {prdc_metrics['recall']:.3f}")
-                        print(f"✅ Density: {prdc_metrics['density']:.3f}")
-                        print(f"✅ Coverage: {prdc_metrics['coverage']:.3f}")
+
 
             # ========== FINAL SUMMARY (CONSOLIDATED) ==========
             print(f"\n{'=' * 80}")
