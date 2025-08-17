@@ -281,27 +281,6 @@ class GANEvaluator:
                         real_features, fake_features
                     )
                     results.update(prdc_metrics)
-
-
-
-            # ========== FINAL SUMMARY (CONSOLIDATED) ==========
-            print(f"\n{'=' * 80}")
-            print(f"EVALUATION SUMMARY for {model_name}")
-            print(f"{'=' * 80}")
-            print(f"📊 FID: {results.get('fid', float('inf')):.4f} (lower is better)")
-            print(f"📊 IS: {results.get('is_mean', 0):.4f} ± {results.get('is_std', 0):.4f} (higher is better)")
-            print(f"📊 KID: {results.get('kid', 0):.6f} (lower is better)")
-
-            if 'mode_coverage' in results:
-                print(f"📊 Mode Coverage: {results.get('mode_coverage', 0):.2%}")
-                print(f"📊 Mode Collapse Score: {results.get('mode_collapse_score', 1):.4f}")
-
-            if 'precision' in results:
-                print(f"📊 Precision: {results['precision']:.4f}")
-                print(f"📊 Recall: {results['recall']:.4f}")
-                print(f"📊 Density: {results['density']:.4f}")
-                print(f"📊 Coverage: {results['coverage']:.4f}")
-
             print(f"Evaluation completed for {model_name} on {dataset_name}")
             return results
 

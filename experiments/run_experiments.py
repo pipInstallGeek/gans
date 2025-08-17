@@ -123,6 +123,9 @@ class ExperimentRunner:
                     self.evaluation_results[key] = results
 
                     # Print actual metrics that exist
+                    print(f"\n{'=' * 80}")
+                    print(f"EVALUATION SUMMARY for {model_name}")
+                    print(f"{'=' * 80}")
                     print(f"FID: {results.get('fid', 'N/A'):.2f}")
                     print(f"IS: {results.get('is_mean', 'N/A'):.2f} ± {results.get('is_std', 'N/A'):.2f}")
                     print(f"KID: {results.get('kid_mean', 'N/A'):.6f} ± {results.get('kid_std', 'N/A'):.6f}")
@@ -172,7 +175,14 @@ class ExperimentRunner:
             if 'error' in results:
                 continue
 
-            model_name, dataset_name = key.split('_', 1)
+            # Use rsplit to split from the right side, taking only the last element as dataset_name
+            parts = key.rsplit('_', 1)
+            if len(parts) == 2:
+                model_name, dataset_name = parts
+            else:
+                # Fallback in case there's no underscore (shouldn't happen)
+                model_name = key
+                dataset_name = "unknown"
 
             # Get training results
             training_info = self.training_results.get(key, {})
@@ -232,9 +242,10 @@ class ExperimentRunner:
                     dataset_df[col] = dataset_df[col].round(3)
 
             # Save dataset-specific table
+            dataset_lower = dataset.lower()
             dataset_file = os.path.join(
                 self.config.results_dir,
-                f'results_{dataset.lower()}.csv'
+                f'results_{dataset_lower}.csv'  # Fixed naming to avoid splitting model names
             )
             dataset_df.to_csv(dataset_file, index=False)
 
