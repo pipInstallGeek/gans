@@ -86,24 +86,6 @@ class ResultsVisualizer:
         # 12. Output diversity comparison
         self.plot_output_diversity(model_names, dataset_names)
         
-        # 7. Loss landscape visualization
-        self.plot_loss_landscape(model_names, dataset_names)
-        
-        # 8. Quality-diversity analysis
-        self.plot_quality_diversity_tradeoff(evaluation_results, model_names, dataset_names)
-        
-        # 9. Mode collapse visualization
-        self.visualize_mode_collapse(evaluation_results, model_names, dataset_names)
-        
-        # 10. Metric correlation heatmap
-        self.plot_metric_correlations(evaluation_results, model_names, dataset_names)
-        
-        # 11. Learning curves convergence
-        self.plot_convergence_analysis(model_names, dataset_names)
-        
-        # 12. Generator output diversity
-        self.plot_output_diversity(model_names, dataset_names)
-        
         print(f"All visualizations saved to {self.plots_dir}")
     
     def plot_training_curves_comparison(self, model_names, dataset_names):
@@ -130,7 +112,6 @@ class ResultsVisualizer:
                         checkpoint_path = os.path.join(model_dir, latest_checkpoint)
                         
                         try:
-                            import torch
                             checkpoint = torch.load(checkpoint_path, map_location='cpu')
                             g_losses = checkpoint.get('g_losses', [])
                             d_losses = checkpoint.get('d_losses', [])
@@ -165,8 +146,9 @@ class ResultsVisualizer:
     def plot_metrics_comparison(self, evaluation_results, model_names, dataset_names):
         """Plot metrics comparison bar charts"""
         
-        metrics = ['fid', 'is_mean', 'mode_coverage', 'stability_score']
-        metric_names = ['FID (↓)', 'Inception Score (↑)', 'Mode Coverage (↑)', 'Stability Score (↑)']
+        # Updated metrics to match your evaluation system
+        metrics = ['fid', 'is_mean', 'mode_coverage', 'mode_collapse_score']
+        metric_names = ['FID (↓)', 'Inception Score (↑)', 'Mode Coverage (↑)', 'Mode Collapse Score (↓)']
         
         for dataset_name in dataset_names:
             fig, axes = plt.subplots(2, 2, figsize=(12, 10))
@@ -221,9 +203,10 @@ class ResultsVisualizer:
             fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
             
             # Define metrics and their ranges
-            metrics = ['fid', 'is_mean', 'mode_coverage', 'stability_score']
+            metrics = ['fid', 'is_mean', 'mode_coverage', 'precision', 'recall']
             metric_labels = ['FID\n(Lower Better)', 'Inception Score\n(Higher Better)', 
-                           'Mode Coverage\n(Higher Better)', 'Stability Score\n(Higher Better)']
+                           'Mode Coverage\n(Higher Better)', 'Precision\n(Higher Better)',
+                           'Recall\n(Higher Better)']
             
             # Collect all values for normalization
             all_values = {metric: [] for metric in metrics}
@@ -291,11 +274,11 @@ class ResultsVisualizer:
             plt.close()
     
     def plot_stability_analysis(self, evaluation_results, model_names, dataset_names):
-        """Plot detailed stability analysis"""
+        """Plot detailed stability analysis based on available metrics"""
         
-        stability_metrics = ['g_loss_var', 'd_loss_var', 'g_oscillation', 'd_oscillation']
-        metric_names = ['Generator Loss Variance', 'Discriminator Loss Variance', 
-                       'Generator Oscillation', 'Discriminator Oscillation']
+        # Use actual metrics that exist in your evaluation results
+        stability_metrics = ['mode_collapse_score', 'precision', 'recall', 'coverage']
+        metric_names = ['Mode Collapse Score (↓)', 'Precision (↑)', 'Recall (↑)', 'Coverage (↑)']
         
         for dataset_name in dataset_names:
             fig, axes = plt.subplots(2, 2, figsize=(12, 10))
@@ -325,7 +308,7 @@ class ResultsVisualizer:
                         axes[i].text(bar.get_x() + bar.get_width()/2., height + height*0.01,
                                    f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
                     
-                    axes[i].set_title(f'{metric_name}\n(Lower = More Stable)', fontweight='bold')
+                    axes[i].set_title(metric_name, fontweight='bold')
                     axes[i].set_ylabel('Value')
                     axes[i].grid(True, alpha=0.3, axis='y')
                     
@@ -410,10 +393,10 @@ class ResultsVisualizer:
             self._plot_single_metric(ax3, evaluation_results, model_names, dataset_name, 
                                    'mode_coverage', 'Mode Coverage (↑)')
             
-            # 4. Stability Score (top-right)
+            # 4. Mode Collapse Score (top-right)
             ax4 = fig.add_subplot(gs[0, 3])
             self._plot_single_metric(ax4, evaluation_results, model_names, dataset_name, 
-                                   'stability_score', 'Stability Score (↑)')
+                                   'mode_collapse_score', 'Mode Collapse (↓)')
             
             # 5. Training Time Comparison (middle-left)
             ax5 = fig.add_subplot(gs[1, 0])
@@ -544,15 +527,15 @@ class ResultsVisualizer:
                 fid = evaluation_results[key].get('fid', float('inf'))
                 is_score = evaluation_results[key].get('is_mean', 0)
                 coverage = evaluation_results[key].get('mode_coverage', 0)
-                stability = evaluation_results[key].get('stability_score', 0)
+                mode_collapse = evaluation_results[key].get('mode_collapse_score', 1)
                 
                 if np.isfinite(fid):
                     # Normalize and combine metrics (higher is better)
                     composite = (
-                        (1 / (1 + fid)) * 0.3 +  # FID (inverted)
-                        (is_score / 10) * 0.3 +   # IS (normalized to ~0-1)
-                        coverage * 0.2 +          # Mode coverage
-                        (stability / 10) * 0.2    # Stability
+                        (1 / (1 + fid)) * 0.3 +         # FID (inverted)
+                        (is_score / 10) * 0.3 +          # IS (normalized to ~0-1)
+                        coverage * 0.2 +                 # Mode coverage
+                        (1 - mode_collapse) * 0.2        # Mode collapse (inverted)
                     )
                     scores.append(composite)
                     labels.append(model_name.upper())
@@ -600,7 +583,7 @@ class ResultsVisualizer:
             else:
                 row.append("N/A")
             
-            # Add KID score if available
+            # Add KID score if available (updated to use kid_mean/kid_std)
             if key in evaluation_results and 'kid_mean' in evaluation_results[key]:
                 kid_mean = evaluation_results[key]['kid_mean']
                 kid_std = evaluation_results[key].get('kid_std', 0)
@@ -639,161 +622,6 @@ class ResultsVisualizer:
         # Return the table object
         return table
     
-    def plot_output_diversity(self, model_names, dataset_names):
-        """Visualize diversity of generated samples from different models"""
-        import torch
-        
-        for dataset_name in dataset_names:
-            # Determine number of models to visualize
-            num_models = len(model_names)
-            if num_models == 0:
-                continue
-                
-            # Create figure: one row per model, plus one row for real data
-            fig, axes = plt.subplots(num_models + 1, 1, figsize=(14, 5 * (num_models + 1)))
-            
-            if num_models == 1:
-                axes = np.array([axes])
-                
-            # Set up real data samples as the first row
-            real_data_dir = os.path.join(self.config.data_dir, dataset_name, 'samples')
-            real_samples = []
-            
-            if os.path.exists(real_data_dir):
-                # Get sample images from real data directory
-                sample_files = [f for f in os.listdir(real_data_dir) 
-                              if f.endswith(('.png', '.jpg', '.jpeg'))]
-                
-                # Take a subset of samples
-                num_samples = min(8, len(sample_files))
-                selected_samples = np.random.choice(sample_files, num_samples, replace=False)
-                
-                for sample_file in selected_samples:
-                    try:
-                        img_path = os.path.join(real_data_dir, sample_file)
-                        img = plt.imread(img_path)
-                        real_samples.append(img)
-                    except Exception as e:
-                        print(f"Could not load real sample {sample_file}: {e}")
-            
-            # If no real samples found, check if there's a generated reference
-            if not real_samples:
-                reference_dir = os.path.join(self.config.data_dir, f"{dataset_name}_reference")
-                if os.path.exists(reference_dir):
-                    reference_files = [f for f in os.listdir(reference_dir) 
-                                     if f.endswith(('.png', '.jpg', '.jpeg'))]
-                    
-                    num_samples = min(8, len(reference_files))
-                    selected_references = np.random.choice(reference_files, num_samples, replace=False)
-                    
-                    for reference_file in selected_references:
-                        try:
-                            img_path = os.path.join(reference_dir, reference_file)
-                            img = plt.imread(img_path)
-                            real_samples.append(img)
-                        except Exception as e:
-                            print(f"Could not load reference sample {reference_file}: {e}")
-            
-            # Plot real samples
-            if real_samples:
-                ax_real = axes[0]
-                ax_real.set_title(f"Real Data Samples - {dataset_name.upper()}", 
-                                fontweight='bold', fontsize=14)
-                ax_real.axis('off')
-                
-                # Calculate grid dimensions
-                grid_cols = min(8, len(real_samples))
-                grid_rows = (len(real_samples) + grid_cols - 1) // grid_cols
-                
-                for i, img in enumerate(real_samples):
-                    # Create subplot within the main axes
-                    inner_ax = plt.axes((
-                        ax_real.get_position().x0 + (i % grid_cols) * (ax_real.get_position().width / grid_cols),
-                        ax_real.get_position().y0,
-                        ax_real.get_position().width / grid_cols,
-                        ax_real.get_position().height
-                    ))
-                    
-                    inner_ax.imshow(img)
-                    inner_ax.axis('off')
-            else:
-                axes[0].text(0.5, 0.5, "No Real Data Samples Available", 
-                           ha='center', va='center', fontsize=14)
-                axes[0].set_title(f"Real Data Samples - {dataset_name.upper()}", 
-                                fontweight='bold', fontsize=14)
-                axes[0].axis('off')
-            
-            # For each model, find and visualize generated samples
-            for i, model_name in enumerate(model_names):
-                ax_model = axes[i + 1]  # +1 to account for real data row
-                
-                # Set title for this model
-                ax_model.set_title(f"Generated Samples - {model_name.upper()}", 
-                                 fontweight='bold', fontsize=14)
-                ax_model.axis('off')
-                
-                # Look for generated samples
-                samples_dir = os.path.join(self.config.samples_dir, f"{model_name}_{dataset_name}")
-                
-                if os.path.exists(samples_dir):
-                    # Get generated sample images
-                    sample_files = [f for f in os.listdir(samples_dir) 
-                                  if f.endswith(('.png', '.jpg', '.jpeg'))]
-                    
-                    if sample_files:
-                        # Take a subset of samples - same number as real data if possible
-                        num_samples = min(8, len(sample_files))
-                        selected_samples = np.random.choice(sample_files, num_samples, replace=False)
-                        
-                        # Sort by filename to potentially get a chronological view
-                        selected_samples = sorted(selected_samples)
-                        
-                        # Load and display samples
-                        gen_samples = []
-                        for sample_file in selected_samples:
-                            try:
-                                img_path = os.path.join(samples_dir, sample_file)
-                                img = plt.imread(img_path)
-                                gen_samples.append(img)
-                            except Exception as e:
-                                print(f"Could not load generated sample {sample_file}: {e}")
-                        
-                        # Calculate grid dimensions
-                        grid_cols = min(8, len(gen_samples))
-                        grid_rows = (len(gen_samples) + grid_cols - 1) // grid_cols
-                        
-                        for j, img in enumerate(gen_samples):
-                            # Create subplot within the main axes
-                            inner_ax = plt.axes((
-                                ax_model.get_position().x0 + (j % grid_cols) * (ax_model.get_position().width / grid_cols),
-                                ax_model.get_position().y0,
-                                ax_model.get_position().width / grid_cols,
-                                ax_model.get_position().height
-                            ))
-                            
-                            inner_ax.imshow(img)
-                            inner_ax.axis('off')
-                    else:
-                        ax_model.text(0.5, 0.5, "No Generated Samples Found", 
-                                   ha='center', va='center', fontsize=14)
-                else:
-                    # Check for a model directory
-                    model_dir = os.path.join(self.config.models_dir, f"{model_name}_{dataset_name}")
-                    
-                    if os.path.exists(model_dir):
-                        ax_model.text(0.5, 0.5, "Model Exists but No Samples Generated", 
-                                   ha='center', va='center', fontsize=14)
-                    else:
-                        ax_model.text(0.5, 0.5, "Model Not Found", 
-                                   ha='center', va='center', fontsize=14)
-            
-            plt.tight_layout()
-            plt.subplots_adjust(hspace=0.3)
-            
-            plt.savefig(os.path.join(self.plots_dir, f'output_diversity_{dataset_name}.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
-
     def plot_loss_landscape(self, model_names, dataset_names):
         """Plot loss landscape visualization from training history"""
         
@@ -837,10 +665,11 @@ class ResultsVisualizer:
                                 axes[i, 0].grid(True, alpha=0.3)
                                 
                                 # Calculate smoothed gradient for visualization
-                                smoothed_grad = gaussian_filter1d(g_diff, sigma=3)
-                                axes[i, 0].plot(x, smoothed_grad, color='green', alpha=0.5, 
-                                              linewidth=2, label='Smoothed')
-                                axes[i, 0].legend()
+                                if len(g_diff) > 3:
+                                    smoothed_grad = gaussian_filter1d(g_diff, sigma=3)
+                                    axes[i, 0].plot(x, smoothed_grad, color='green', alpha=0.5, 
+                                                  linewidth=2, label='Smoothed')
+                                    axes[i, 0].legend()
                                 
                                 # Plot discriminator loss landscape
                                 axes[i, 1].plot(x, d_diff, color='red', alpha=0.7)
@@ -851,10 +680,11 @@ class ResultsVisualizer:
                                 axes[i, 1].grid(True, alpha=0.3)
                                 
                                 # Calculate smoothed gradient for visualization
-                                smoothed_grad = gaussian_filter1d(d_diff, sigma=3)
-                                axes[i, 1].plot(x, smoothed_grad, color='green', alpha=0.5, 
-                                              linewidth=2, label='Smoothed')
-                                axes[i, 1].legend()
+                                if len(d_diff) > 3:
+                                    smoothed_grad = gaussian_filter1d(d_diff, sigma=3)
+                                    axes[i, 1].plot(x, smoothed_grad, color='green', alpha=0.5, 
+                                                  linewidth=2, label='Smoothed')
+                                    axes[i, 1].legend()
                             else:
                                 axes[i, 0].text(0.5, 0.5, 'Insufficient Data', ha='center', va='center', transform=axes[i, 0].transAxes)
                                 axes[i, 1].text(0.5, 0.5, 'Insufficient Data', ha='center', va='center', transform=axes[i, 1].transAxes)
@@ -921,24 +751,25 @@ class ResultsVisualizer:
                                fontweight='bold', fontsize=10)
                 
                 # Plot quadrants for quality-diversity analysis
-                x_mid = np.mean(quality_values)
-                y_mid = np.mean(diversity_values)
-                
-                ax.axhline(y=float(y_mid), color='gray', linestyle='--', alpha=0.5)
-                ax.axvline(x=float(x_mid), color='gray', linestyle='--', alpha=0.5)
-                
-                # Add quadrant labels
-                ax.text(ax.get_xlim()[1]*0.95, ax.get_ylim()[1]*0.95, 'High Quality\nHigh Diversity', 
-                       ha='right', va='top', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
-                
-                ax.text(ax.get_xlim()[0]*1.05, ax.get_ylim()[1]*0.95, 'Low Quality\nHigh Diversity', 
-                       ha='left', va='top', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
-                
-                ax.text(ax.get_xlim()[1]*0.95, ax.get_ylim()[0]*1.05, 'High Quality\nLow Diversity', 
-                       ha='right', va='bottom', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
-                
-                ax.text(ax.get_xlim()[0]*1.05, ax.get_ylim()[0]*1.05, 'Low Quality\nLow Diversity', 
-                       ha='left', va='bottom', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
+                if len(quality_values) > 1:
+                    x_mid = np.mean(quality_values)
+                    y_mid = np.mean(diversity_values)
+                    
+                    ax.axhline(y=float(y_mid), color='gray', linestyle='--', alpha=0.5)
+                    ax.axvline(x=float(x_mid), color='gray', linestyle='--', alpha=0.5)
+                    
+                    # Add quadrant labels
+                    ax.text(ax.get_xlim()[1]*0.95, ax.get_ylim()[1]*0.95, 'High Quality\nHigh Diversity', 
+                           ha='right', va='top', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
+                    
+                    ax.text(ax.get_xlim()[0]*1.05, ax.get_ylim()[1]*0.95, 'Low Quality\nHigh Diversity', 
+                           ha='left', va='top', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
+                    
+                    ax.text(ax.get_xlim()[1]*0.95, ax.get_ylim()[0]*1.05, 'High Quality\nLow Diversity', 
+                           ha='right', va='bottom', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
+                    
+                    ax.text(ax.get_xlim()[0]*1.05, ax.get_ylim()[0]*1.05, 'Low Quality\nLow Diversity', 
+                           ha='left', va='bottom', fontsize=9, bbox=dict(facecolor='white', alpha=0.5))
                 
                 # Set labels and title
                 ax.set_xlabel('Image Quality (Inception Score)', fontweight='bold')
@@ -970,7 +801,7 @@ class ResultsVisualizer:
             # Prepare data for visualization
             models = []
             mode_coverage = []
-            kl_divergence = []
+            mode_collapse_scores = []
             prdc_recall = []
             
             for model_name in model_names:
@@ -982,9 +813,9 @@ class ResultsVisualizer:
                     mode_cov = evaluation_results[key].get('mode_coverage', 0)
                     mode_coverage.append(mode_cov if np.isfinite(mode_cov) else 0)
                     
-                    # Get KL divergence (lower is better)
-                    kl_div = evaluation_results[key].get('kl_divergence', 1)
-                    kl_divergence.append(kl_div if np.isfinite(kl_div) and kl_div > 0 else 1)
+                    # Get mode collapse score (lower is better)
+                    collapse_score = evaluation_results[key].get('mode_collapse_score', 1)
+                    mode_collapse_scores.append(collapse_score if np.isfinite(collapse_score) else 1)
                     
                     # Get PRDC recall (higher is better)
                     recall = evaluation_results[key].get('recall', 0)
@@ -1035,9 +866,9 @@ class ResultsVisualizer:
             x = np.arange(len(models))
             width = 0.35
             
-            # KL Divergence (inverse for visualization since lower is better)
-            inverse_kl = [1/kl if kl > 0 else 0 for kl in kl_divergence]
-            ax2.bar(x - width/2, inverse_kl, width, label='Inverse KL Divergence', color='skyblue')
+            # Mode collapse scores (inverse for visualization since lower is better)
+            inverse_collapse = [1 - score for score in mode_collapse_scores]
+            ax2.bar(x - width/2, inverse_collapse, width, label='1 - Mode Collapse Score', color='skyblue')
             
             # PRDC Recall
             ax2.bar(x + width/2, prdc_recall, width, label='PRDC Recall', color='lightcoral')
@@ -1049,7 +880,7 @@ class ResultsVisualizer:
             ax2.set_xticklabels(models)
             ax2.legend()
             
-            # 3. Scatter plot of Mode Coverage vs KL Divergence
+            # 3. Scatter plot of Mode Coverage vs Mode Collapse Score
             ax3 = fig.add_subplot(223)
             
             if len(models) > 1:
@@ -1057,27 +888,27 @@ class ResultsVisualizer:
                 colors = plt.cm.get_cmap('viridis')(np.linspace(0, 1, len(models)))
                 
                 for i, model in enumerate(models):
-                    ax3.scatter(kl_divergence[i], mode_coverage[i], color=colors[i], s=100, label=model)
-                    ax3.annotate(model, (kl_divergence[i], mode_coverage[i]), 
+                    ax3.scatter(mode_collapse_scores[i], mode_coverage[i], color=colors[i], s=100, label=model)
+                    ax3.annotate(model, (mode_collapse_scores[i], mode_coverage[i]), 
                                xytext=(5, 5), textcoords='offset points')
                 
-                ax3.set_xlabel('KL Divergence (lower is better)')
+                ax3.set_xlabel('Mode Collapse Score (lower is better)')
                 ax3.set_ylabel('Mode Coverage (higher is better)')
-                ax3.set_title('Mode Coverage vs KL Divergence', fontweight='bold')
+                ax3.set_title('Mode Coverage vs Mode Collapse Score', fontweight='bold')
                 
                 # Add quadrant lines
-                if kl_divergence and mode_coverage:
-                    kl_mid = np.median(kl_divergence)
+                if mode_collapse_scores and mode_coverage:
+                    collapse_mid = np.median(mode_collapse_scores)
                     coverage_mid = np.median(mode_coverage)
                     
                     ax3.axhline(y=float(coverage_mid), color='gray', linestyle='--', alpha=0.5)
-                    ax3.axvline(x=float(kl_mid), color='gray', linestyle='--', alpha=0.5)
+                    ax3.axvline(x=float(collapse_mid), color='gray', linestyle='--', alpha=0.5)
                     
                     # Add quadrant labels
-                    ax3.text(ax3.get_xlim()[1]*0.95, ax3.get_ylim()[1]*0.95, 'High Coverage\nLow Divergence\n(Best)', 
+                    ax3.text(ax3.get_xlim()[1]*0.95, ax3.get_ylim()[1]*0.95, 'High Coverage\nLow Collapse\n(Best)', 
                            ha='right', va='top', fontsize=8, bbox=dict(facecolor='white', alpha=0.5))
                     
-                    ax3.set_xlim(left=0)  # KL divergence cannot be negative
+                    ax3.set_xlim(left=0)  # Mode collapse score cannot be negative
                     ax3.set_ylim(bottom=0)  # Coverage cannot be negative
                 
                 ax3.legend()
@@ -1101,7 +932,7 @@ class ResultsVisualizer:
                 
                 text += "Mode Collapse Interpretation:\n"
                 text += "- Higher mode coverage indicates better diversity\n"
-                text += "- Lower KL divergence indicates better distribution matching\n"
+                text += "- Lower mode collapse score indicates less collapse\n"
                 text += "- Higher recall indicates better coverage of real data modes\n\n"
                 
                 text += "Recommendations:\n"
@@ -1129,7 +960,6 @@ class ResultsVisualizer:
         
         for dataset_name in dataset_names:
             # Collect metrics for all models on this dataset
-            metrics_data = {}
             model_data = []
             
             for model_name in model_names:
@@ -1138,11 +968,11 @@ class ResultsVisualizer:
                     # Extract standard metrics that should be available for most models
                     model_metrics = {
                         'fid': evaluation_results[key].get('fid', np.nan),
-                        'kid': evaluation_results[key].get('kid_mean', np.nan),
+                        'kid_mean': evaluation_results[key].get('kid_mean', np.nan),
                         'is_mean': evaluation_results[key].get('is_mean', np.nan),
                         'is_std': evaluation_results[key].get('is_std', np.nan),
                         'mode_coverage': evaluation_results[key].get('mode_coverage', np.nan),
-                        'kl_divergence': evaluation_results[key].get('kl_divergence', np.nan),
+                        'mode_collapse_score': evaluation_results[key].get('mode_collapse_score', np.nan),
                         'precision': evaluation_results[key].get('precision', np.nan),
                         'recall': evaluation_results[key].get('recall', np.nan),
                         'density': evaluation_results[key].get('density', np.nan),
@@ -1195,97 +1025,6 @@ class ResultsVisualizer:
             plt.savefig(os.path.join(self.plots_dir, f'metric_correlations_{dataset_name}.png'), 
                        dpi=300, bbox_inches='tight')
             plt.close()
-            
-            # Now create a radar chart showing metric profiles for each model
-            if len(model_names) > 0 and len(numeric_cols) > 2:
-                # Normalize metrics for radar chart (higher is better for all)
-                normalized_df = df[numeric_cols].copy()
-                
-                # Reverse metrics where lower is better (like FID, KID, KL divergence)
-                for col in ['fid', 'kid', 'kl_divergence']:
-                    if col in normalized_df.columns:
-                        # Avoid division by zero
-                        max_val = normalized_df[col].max()
-                        if max_val > 0:
-                            normalized_df[col] = 1 - (normalized_df[col] / max_val)
-                        else:
-                            normalized_df[col] = 0
-                
-                # Normalize other metrics where higher is better
-                for col in set(numeric_cols) - {'fid', 'kid', 'kl_divergence'}:
-                    if col in normalized_df.columns:
-                        max_val = normalized_df[col].max()
-                        if max_val > 0:
-                            normalized_df[col] = normalized_df[col] / max_val
-                
-                # Radar chart
-                fig = plt.figure(figsize=(12, 8))
-                
-                # Number of variables
-                categories = numeric_cols
-                N = len(categories)
-                
-                # Create radar chart
-                angles = [n / float(N) * 2 * np.pi for n in range(N)]
-                angles += angles[:1]  # close the loop
-                
-                ax = plt.subplot(111, polar=True)
-                
-                # Add each model
-                for i, model in enumerate(df['model']):
-                    values = normalized_df.loc[model].values.flatten().tolist()
-                    values += values[:1]  # close the loop
-                    
-                    # Plot values
-                    ax.plot(angles, values, linewidth=2, linestyle='solid', label=model.upper())
-                    ax.fill(angles, values, alpha=0.1)
-                
-                # We need to use a polar projection for radar chart
-                ax = plt.subplot(111, polar=True)
-                
-                # Add each model
-                for i, model in enumerate(df['model']):
-                    values = normalized_df.loc[model].values.flatten().tolist()
-                    values += values[:1]  # close the loop
-                    
-                    # Plot values
-                    ax.plot(angles, values, linewidth=2, linestyle='solid', label=model.upper())
-                    ax.fill(angles, values, alpha=0.1)
-                
-                # Configure polar axes for radar chart
-                # These attributes are specific to polar projections but not recognized by Pylance
-                try:
-                    # Using getattr to avoid static type checking errors
-                    getattr(ax, 'set_theta_offset')(np.pi / 2)
-                    getattr(ax, 'set_theta_direction')(-1)
-                except Exception:
-                    # Fallback if running with a different matplotlib version
-                    pass
-                
-                # Draw axis lines for each angle and label
-                ax.set_xticks(angles[:-1])
-                ax.set_xticklabels(categories)
-                
-                # Draw ylabels - also specific to PolarAxes
-                try:
-                    getattr(ax, 'set_rlabel_position')(0)
-                except Exception:
-                    pass
-                    
-                ax.set_yticks([0.25, 0.5, 0.75])
-                ax.set_yticklabels(["0.25", "0.5", "0.75"])
-                ax.set_ylim(0, 1)
-                
-                # Add legend
-                plt.legend(loc='upper right', bbox_to_anchor=(0.1, 0.1))
-                
-                plt.title(f'Metric Profiles - {dataset_name.upper()}', 
-                        fontsize=16, fontweight='bold')
-                
-                plt.tight_layout()
-                plt.savefig(os.path.join(self.plots_dir, f'metric_profiles_{dataset_name}.png'), 
-                           dpi=300, bbox_inches='tight')
-                plt.close()
 
     def plot_convergence_analysis(self, model_names, dataset_names):
         """Analyze and visualize convergence properties of different models"""
@@ -1438,16 +1177,14 @@ class ResultsVisualizer:
                     step = max(1, min_length // 100)
                     
                     # Plot with markers that get darker to show progression
-                    cmap = plt.cm.get_cmap('viridis')
-                    
                     for j in range(0, min_length, step):
                         frac = j / min_length
-                        axes[3].scatter(d_losses[j], g_losses[j], color=cmap(frac), 
-                                     s=30, alpha=0.7, edgecolors=color)
+                        alpha = 0.3 + 0.7 * frac  # Start light, end dark
+                        axes[3].scatter(d_losses[j], g_losses[j], color=color, 
+                                     s=30, alpha=alpha)
                     
                     # Add connecting lines with alpha gradient
                     for j in range(0, min_length-step, step):
-                        frac = j / min_length
                         axes[3].plot([d_losses[j], d_losses[j+step]], 
                                   [g_losses[j], g_losses[j+step]], 
                                   color=color, alpha=0.3)
@@ -1477,3 +1214,116 @@ class ResultsVisualizer:
             plt.savefig(os.path.join(self.plots_dir, f'convergence_analysis_{dataset_name}.png'), 
                        dpi=300, bbox_inches='tight')
             plt.close()
+
+    def plot_output_diversity(self, model_names, dataset_names):
+        """Visualize diversity of generated samples from different models"""
+        
+        for dataset_name in dataset_names:
+            # Determine number of models to visualize
+            num_models = len(model_names)
+            if num_models == 0:
+                continue
+                
+            # Create figure: one row per model, plus one row for real data
+            fig, axes = plt.subplots(num_models + 1, 1, figsize=(14, 5 * (num_models + 1)))
+            
+            if num_models == 0:
+                axes = np.array([axes])
+            elif num_models == 1:
+                axes = np.array([axes[0], axes[1]])
+                
+            # Set up real data samples using YOUR DATALOADER SYSTEM
+            real_samples = []
+            
+            try:
+                # Import YOUR dataset loader
+                from datasets.data_loaders import DatasetLoader
+                
+                # Create dataloader instance using your config
+                dataset_loader = DatasetLoader(self.config)
+                
+                # Get dataloader for real data
+                real_dataloader = dataset_loader.get_eval_dataloader(dataset_name, batch_size=32)
+                
+                # Extract samples from dataloader
+                samples_collected = 0
+                target_samples = 8
+                
+                for batch_idx, batch in enumerate(real_dataloader):
+                    if samples_collected >= target_samples:
+                        break
+                    
+                    # Handle different dataset formats based on your implementation
+                    if dataset_name == 'celeba':
+                        # CelebA returns batch[0] directly (data only)
+                        data = batch[0]
+                    else:
+                        # MNIST/CIFAR10 return (data, labels)
+                        data, _ = batch
+                    
+                    # Convert to numpy and process each image in batch
+                    data = data.cpu().numpy()
+                    
+                    for i in range(data.shape[0]):
+                        if samples_collected >= target_samples:
+                            break
+                        
+                        img = data[i]
+                        
+                        # Handle different image formats based on your normalization
+                        if img.shape[0] == 1:  # Grayscale (1, H, W) - MNIST
+                            img = np.transpose(img, (1, 2, 0))  # (H, W, 1)
+                            img = np.squeeze(img, axis=2)  # (H, W)
+                        elif img.shape[0] == 3:  # RGB (3, H, W) - CIFAR10/CelebA
+                            img = np.transpose(img, (1, 2, 0))  # (H, W, 3)
+                        
+                        # Denormalize from [-1, 1] to [0, 1] as per your transforms
+                        img = (img + 1) / 2
+                        
+                        # Ensure values are in [0, 1] range
+                        img = np.clip(img, 0, 1)
+                        
+                        real_samples.append(img)
+                        samples_collected += 1
+                        
+            except Exception as e:
+                print(f"Could not load real data using YOUR dataloader: {e}")
+                print("FALLBACK: This should not happen with your dataloader implementation")
+            
+            # Plot real samples
+            if real_samples:
+                axes[0].set_title(f"Real Data Samples - {dataset_name.upper()}", 
+                                fontweight='bold', fontsize=14)
+                axes[0].axis('off')
+                
+                # Create a grid of images
+                n_cols = min(8, len(real_samples))
+                n_rows = (len(real_samples) + n_cols - 1) // n_cols
+                
+                # Create subplot grid within the main axes
+                for idx, img in enumerate(real_samples):
+                    row = idx // n_cols
+                    col = idx % n_cols
+                    
+                    # Calculate position within the axes
+                    left = col / n_cols
+                    bottom = 1 - (row + 1) / n_rows
+                    width = 1 / n_cols
+                    height = 1 / n_rows
+                    
+                    # Create inset axes
+                    inset_ax = axes[0].inset_axes([left, bottom, width, height])
+                    
+                    # Handle grayscale vs color images
+                    if len(img.shape) == 2:  # Grayscale
+                        inset_ax.imshow(img, cmap='gray')
+                    else:  # Color
+                        inset_ax.imshow(img)
+                    
+                    inset_ax.axis('off')
+            else:
+                axes[0].text(0.5, 0.5, "ERROR: Could not load real data samples", 
+                           ha='center', va='center', fontsize=14, color='red')
+                axes[0].set_title(f"Real Data Samples - {dataset_name.upper()}", 
+                                fontweight='bold', fontsize=14)
+                axes[0].axis('off')
