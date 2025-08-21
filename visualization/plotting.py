@@ -86,6 +86,7 @@ class ResultsVisualizer:
         # 12. Output diversity comparison
         self.plot_output_diversity(model_names, dataset_names)
         
+        self.plot_iteration_losses(model_names, dataset_names)
         print(f"All visualizations saved to {self.plots_dir}")
     
     def plot_training_curves_comparison(self, model_names, dataset_names):
