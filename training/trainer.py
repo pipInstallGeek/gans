@@ -44,6 +44,10 @@ class GANTrainer:
                 # Training step
                 g_loss, d_loss = model.train_step(real_data)
                 
+                # Store iteration-level losses
+                model.g_losses_iter.append(g_loss)
+                model.d_losses_iter.append(d_loss)
+                
                 epoch_g_losses.append(g_loss)
                 epoch_d_losses.append(d_loss)
                 

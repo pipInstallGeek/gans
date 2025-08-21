@@ -1214,6 +1214,211 @@ class ResultsVisualizer:
             plt.savefig(os.path.join(self.plots_dir, f'convergence_analysis_{dataset_name}.png'), 
                        dpi=300, bbox_inches='tight')
             plt.close()
+            
+    def plot_iteration_losses(self, model_names, dataset_names):
+        """Plot detailed iteration-level losses for each model"""
+        print("Plotting iteration-level losses...")
+        
+        for dataset_name in dataset_names:
+            for model_name in model_names:
+                # Create folder for this model-dataset combination
+                save_dir = os.path.join(self.plots_dir, f"{model_name}_{dataset_name}_iter_losses")
+                os.makedirs(save_dir, exist_ok=True)
+                
+                # Try to load model checkpoint
+                model_dir = os.path.join(self.config.models_dir, f"{model_name}_{dataset_name}")
+                if not os.path.exists(model_dir):
+                    print(f"No model directory found for {model_name} on {dataset_name}")
+                    continue
+                    
+                # Find latest checkpoint
+                checkpoint_files = [f for f in os.listdir(model_dir) if f.startswith('checkpoint_')]
+                if not checkpoint_files:
+                    print(f"No checkpoints found for {model_name} on {dataset_name}")
+                    continue
+                    
+                latest_checkpoint = sorted(checkpoint_files)[-1]
+                checkpoint_path = os.path.join(model_dir, latest_checkpoint)
+                
+                try:
+                    # Load checkpoint data
+                    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+                    
+                    # Check if iteration-level losses exist
+                    if 'g_losses_iter' not in checkpoint or 'd_losses_iter' not in checkpoint:
+                        print(f"No iteration-level losses found in checkpoint for {model_name} on {dataset_name}")
+                        continue
+                    
+                    g_losses_iter = checkpoint['g_losses_iter']
+                    d_losses_iter = checkpoint['d_losses_iter']
+                    
+                    if len(g_losses_iter) == 0 or len(d_losses_iter) == 0:
+                        print(f"Empty iteration losses for {model_name} on {dataset_name}")
+                        continue
+                    
+                    print(f"Plotting iteration losses for {model_name} on {dataset_name} ({len(g_losses_iter)} iterations)")
+                    
+                    # 1. Plot all iteration losses
+                    plt.figure(figsize=(12, 6))
+                    iterations = np.arange(1, len(g_losses_iter) + 1)
+                    plt.plot(iterations, g_losses_iter, label='Generator Loss', alpha=0.7)
+                    plt.plot(iterations, d_losses_iter, label='Discriminator Loss', alpha=0.7)
+                    plt.title(f'{model_name.upper()} - Iteration-Level Training Losses on {dataset_name.upper()}')
+                    plt.xlabel('Iteration')
+                    plt.ylabel('Loss')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    
+                    # Add moving average for smoother visualization
+                    window = min(500, len(g_losses_iter) // 10)  # Use 10% of data or 500 points, whichever is smaller
+                    if window > 10:  # Only smooth if we have enough data points
+                        g_smooth = np.convolve(g_losses_iter, np.ones(window)/window, mode='valid')
+                        d_smooth = np.convolve(d_losses_iter, np.ones(window)/window, mode='valid')
+                        # Align the smoothed data with the original iterations
+                        smooth_iterations = iterations[window-1:]
+                        
+                        plt.plot(smooth_iterations, g_smooth, 'r-', 
+                                 label=f'Generator (MA{window})', linewidth=2)
+                        plt.plot(smooth_iterations, d_smooth, 'b-', 
+                                 label=f'Discriminator (MA{window})', linewidth=2)
+                        plt.legend()
+                    
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(save_dir, f'all_iterations.png'), dpi=300)
+                    plt.close()
+                    
+                    # 2. Plot detailed sections
+                    # Divide iterations into multiple chunks for detailed analysis
+                    total_iterations = len(g_losses_iter)
+                    chunk_size = 1000  # Show 1000 iterations per plot
+                    num_chunks = (total_iterations + chunk_size - 1) // chunk_size  # Ceiling division
+                    
+                    for i in range(num_chunks):
+                        start_idx = i * chunk_size
+                        end_idx = min((i + 1) * chunk_size, total_iterations)
+                        
+                        plt.figure(figsize=(12, 6))
+                        chunk_iterations = iterations[start_idx:end_idx]
+                        plt.plot(chunk_iterations, g_losses_iter[start_idx:end_idx], 
+                                 label='Generator Loss', alpha=0.8)
+                        plt.plot(chunk_iterations, d_losses_iter[start_idx:end_idx], 
+                                 label='Discriminator Loss', alpha=0.8)
+                        
+                        plt.title(f'{model_name.upper()} - Detailed Losses (Iterations {start_idx+1} to {end_idx})')
+                        plt.xlabel('Iteration')
+                        plt.ylabel('Loss')
+                        plt.legend()
+                        plt.grid(True, alpha=0.3)
+                        plt.tight_layout()
+                        
+                        # Save the detailed chunk plot
+                        plt.savefig(os.path.join(save_dir, f'iterations_{start_idx+1}_to_{end_idx}.png'), dpi=300)
+                        plt.close()
+                    
+                    # 3. Create loss landscape visualization (if epoch info is available)
+                    if 'g_losses' in checkpoint and 'd_losses' in checkpoint and len(checkpoint['g_losses']) > 1:
+                        epoch_g_losses = checkpoint['g_losses']
+                        iterations_per_epoch = len(g_losses_iter) / len(epoch_g_losses)
+                        
+                        try:
+                            # Create a heatmap visualization of loss landscape
+                            iterations_per_epoch_int = int(iterations_per_epoch)
+                            num_epochs = len(epoch_g_losses)
+                            
+                            # Only create heatmap if we have enough iterations per epoch
+                            if iterations_per_epoch_int > 10:
+                                # Create matrix of correct size (limit to reasonable size)
+                                max_iters_per_epoch = min(iterations_per_epoch_int, 500)
+                                g_loss_matrix = np.zeros((num_epochs, max_iters_per_epoch))
+                                d_loss_matrix = np.zeros((num_epochs, max_iters_per_epoch))
+                                
+                                # Fill the matrices with available data
+                                for iter_idx in range(min(len(g_losses_iter), num_epochs * iterations_per_epoch_int)):
+                                    epoch_idx = int(iter_idx / iterations_per_epoch_int)
+                                    iter_in_epoch = int(iter_idx % iterations_per_epoch_int)
+                                    
+                                    if epoch_idx < num_epochs and iter_in_epoch < max_iters_per_epoch:
+                                        g_loss_matrix[epoch_idx, iter_in_epoch] = g_losses_iter[iter_idx]
+                                        d_loss_matrix[epoch_idx, iter_in_epoch] = d_losses_iter[iter_idx]
+                                
+                                # Create heatmap for generator losses
+                                plt.figure(figsize=(15, 10))
+                                sns.heatmap(g_loss_matrix, cmap="viridis", 
+                                          xticklabels=max_iters_per_epoch//10, 
+                                          yticklabels=1)
+                                plt.title(f'{model_name.upper()} - Generator Loss Landscape on {dataset_name.upper()}')
+                                plt.xlabel('Iteration within Epoch')
+                                plt.ylabel('Epoch')
+                                plt.tight_layout()
+                                plt.savefig(os.path.join(save_dir, 'generator_loss_heatmap.png'), dpi=300)
+                                plt.close()
+                                
+                                # Create heatmap for discriminator losses
+                                plt.figure(figsize=(15, 10))
+                                sns.heatmap(d_loss_matrix, cmap="magma", 
+                                          xticklabels=max_iters_per_epoch//10, 
+                                          yticklabels=1)
+                                plt.title(f'{model_name.upper()} - Discriminator Loss Landscape on {dataset_name.upper()}')
+                                plt.xlabel('Iteration within Epoch')
+                                plt.ylabel('Epoch')
+                                plt.tight_layout()
+                                plt.savefig(os.path.join(save_dir, 'discriminator_loss_heatmap.png'), dpi=300)
+                                plt.close()
+                                
+                                # Create a loss ratio visualization (D/G ratio)
+                                ratio_matrix = np.zeros_like(g_loss_matrix)
+                                for i in range(g_loss_matrix.shape[0]):
+                                    for j in range(g_loss_matrix.shape[1]):
+                                        if g_loss_matrix[i,j] > 0:
+                                            ratio_matrix[i,j] = d_loss_matrix[i,j] / g_loss_matrix[i,j]
+                                
+                                plt.figure(figsize=(15, 10))
+                                sns.heatmap(ratio_matrix, cmap="coolwarm", center=1.0,
+                                          xticklabels=max_iters_per_epoch//10, 
+                                          yticklabels=1)
+                                plt.title(f'{model_name.upper()} - D/G Loss Ratio on {dataset_name.upper()}')
+                                plt.xlabel('Iteration within Epoch')
+                                plt.ylabel('Epoch')
+                                plt.tight_layout()
+                                plt.savefig(os.path.join(save_dir, 'dg_ratio_heatmap.png'), dpi=300)
+                                plt.close()
+                        except Exception as e:
+                            print(f"Error creating heatmap for {model_name} on {dataset_name}: {e}")
+                            
+                    # 4. Export to CSV for further analysis
+                    try:
+                        import pandas as pd
+                        
+                        # Create dataframe with iteration losses
+                        iter_data = {
+                            'iteration': list(range(1, len(g_losses_iter) + 1)),
+                            'generator_loss': g_losses_iter,
+                            'discriminator_loss': d_losses_iter
+                        }
+                        
+                        # Add epoch information if available
+                        if 'g_losses' in checkpoint and len(checkpoint['g_losses']) > 1:
+                            # Estimate which epoch each iteration belongs to
+                            epochs = []
+                            for i in range(len(g_losses_iter)):
+                                epoch = int(i / iterations_per_epoch) + 1
+                                epochs.append(epoch)
+                            iter_data['epoch'] = epochs
+                        
+                        # Create and save dataframe
+                        df = pd.DataFrame(iter_data)
+                        csv_path = os.path.join(save_dir, 'iteration_losses.csv')
+                        df.to_csv(csv_path, index=False)
+                        print(f"Iteration losses exported to CSV: {csv_path}")
+                    except Exception as e:
+                        print(f"Error exporting to CSV: {e}")
+                    
+                    print(f"✅ Iteration loss visualizations for {model_name} on {dataset_name} saved to {save_dir}")
+                    
+                except Exception as e:
+                    print(f"Error processing checkpoint for {model_name} on {dataset_name}: {e}")
+        
+        print("Iteration loss plotting completed.")
 
     def plot_output_diversity(self, model_names, dataset_names):
         """Visualize diversity of generated samples from different models"""

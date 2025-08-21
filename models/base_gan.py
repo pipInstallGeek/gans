@@ -38,8 +38,10 @@ class BaseGAN(ABC):
         self.criterion = nn.BCELoss()
 
         # Training history
-        self.g_losses = []
-        self.d_losses = []
+        self.g_losses = []  # Epoch-level losses
+        self.d_losses = []  # Epoch-level losses
+        self.g_losses_iter = []  # Iteration-level losses
+        self.d_losses_iter = []  # Iteration-level losses
         self.training_history = {}
 
     @abstractmethod
@@ -97,7 +99,9 @@ class BaseGAN(ABC):
             'optimizer_g_state_dict': self.optimizer_g.state_dict(),
             'optimizer_d_state_dict': self.optimizer_d.state_dict(),
             'g_losses': self.g_losses,
-            'd_losses': self.d_losses
+            'd_losses': self.d_losses,
+            'g_losses_iter': self.g_losses_iter,
+            'd_losses_iter': self.d_losses_iter
         }
         torch.save(checkpoint, os.path.join(save_dir, f'checkpoint_epoch_{epoch}.pth'))
         self.device_manager.empty_cache()
@@ -116,6 +120,12 @@ class BaseGAN(ABC):
         self.optimizer_d.load_state_dict(checkpoint['optimizer_d_state_dict'])
         self.g_losses = checkpoint['g_losses']
         self.d_losses = checkpoint['d_losses']
+        
+        # Load iteration-level losses if they exist in the checkpoint
+        if 'g_losses_iter' in checkpoint:
+            self.g_losses_iter = checkpoint['g_losses_iter']
+        if 'd_losses_iter' in checkpoint:
+            self.d_losses_iter = checkpoint['d_losses_iter']
         epoch = checkpoint['epoch']
         print(f"Checkpoint loaded successfully! Epoch: {epoch}")
         self.device_manager.empty_cache()
