@@ -11,3 +11,5 @@ scipy>=1.7.0
 # Metrics packages
 torch-fidelity>=0.3.0
 prdc>=0.2
+# Kaggle API for downloading datasets
+kaggle>=1.5.12
