@@ -10,7 +10,7 @@ class Config:
     def __init__(self):
         # GPU-OPTIMIZED TRAINING PARAMETERS
         self.batch_size = 128         
-        self.epochs = 20              
+        self.epochs = 25              
         self.learning_rate_g = 0.0002 
         self.learning_rate_d = 0.0002
         self.beta1 = 0.5
@@ -86,6 +86,11 @@ class Config:
             },
             'celeba': {
                 'image_size': 64,
+                'num_channels': 3,
+                'num_classes': 1
+            },
+            'celeba-hq': {
+                'image_size': 256,
                 'num_channels': 3,
                 'num_classes': 1
             },

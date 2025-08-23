@@ -40,6 +40,8 @@ class DatasetLoader:
             return self._get_cifar10_loader(batch_size)
         elif dataset_name == 'celeba':
             return self._get_celeba_loader(batch_size)
+        elif dataset_name == 'celeba-hq':
+            return self._get_celeba_hq_loader(batch_size)
         else:
             raise ValueError(f"Unknown dataset: {dataset_name}")
     
@@ -138,6 +140,95 @@ class DatasetLoader:
     def get_eval_dataloader(self, dataset_name, batch_size=64):  # Smaller eval batch
         """Get dataloader for evaluation with smaller batch size"""
         return self.get_dataloader(dataset_name, batch_size)
+    
+    def _get_celeba_hq_loader(self, batch_size):
+        """GPU-optimized CelebA-HQ dataloader"""
+        # CelebA-HQ images are typically 1024x1024, but we'll resize them
+        # to a more manageable size for GAN training
+        image_size = 256  # Can be adjusted to 128, 256, 512 depending on your GPU memory
+        
+        transform = transforms.Compose([
+            transforms.Resize(image_size),
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        
+        print(f"Loading CelebA-HQ dataset (size: {image_size}x{image_size})...")
+        
+        # Create a custom dataset since CelebA-HQ isn't directly available in torchvision
+        dataset = CelebAHQDataset(
+            root=os.path.join(self.data_root, 'celeba-hq'),
+            transform=transform
+        )
+        print("CelebA-HQ dataset loaded successfully.")
+        
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            prefetch_factor=self.prefetch_factor,
+            drop_last=True
+        )
+        
+        return dataloader
+    
+# Custom dataset class for CelebA-HQ
+class CelebAHQDataset(Dataset):
+    """
+    Custom dataset for CelebA-HQ images
+    
+    This dataset assumes that CelebA-HQ images are stored in a directory
+    with each image named by its index (e.g., 0.jpg, 1.jpg, etc.)
+    """
+    def __init__(self, root, transform=None):
+        self.root = root
+        self.transform = transform
+        
+        # Create directory if it doesn't exist
+        os.makedirs(root, exist_ok=True)
+        
+        # Check if dataset exists, and provide download instructions if not
+        self.image_paths = sorted(glob.glob(os.path.join(root, '*.jpg')) + 
+                                 glob.glob(os.path.join(root, '*.png')))
+        
+        if len(self.image_paths) == 0:
+            print("⚠️ CelebA-HQ dataset not found.")
+            print("Please download CelebA-HQ dataset manually from:")
+            print("https://github.com/tkarras/progressive_growing_of_gans")
+            print("Or download and extract the dataset using:")
+            print("$ python scripts/download_data.py --dataset celeba-hq --download_dir ./data")
+            print(f"Then place the images in {root}")
+            
+            # Create a dummy dataset with a warning message
+            self.is_empty = True
+        else:
+            print(f"Found {len(self.image_paths)} images in CelebA-HQ dataset.")
+            self.is_empty = False
+    
+    def __len__(self):
+        if self.is_empty:
+            return 1  # Return 1 for the dummy dataset
+        return len(self.image_paths)
+    
+    def __getitem__(self, idx):
+        if self.is_empty:
+            # Return a dummy sample if dataset is empty
+            dummy_img = torch.zeros(3, 256, 256)
+            return dummy_img
+        
+        # Load image
+        img_path = self.image_paths[idx]
+        image = Image.open(img_path).convert('RGB')
+        
+        # Apply transformations
+        if self.transform:
+            image = self.transform(image)
+        
+        return image
     
 # Include the get_model_class function
 def get_model_class(model_name):
