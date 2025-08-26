@@ -6,6 +6,7 @@ import torch.optim as optim
 from abc import ABC, abstractmethod
 import os
 import math
+import numpy as np
 from utils.device_manager import DeviceManager
 
 
@@ -76,10 +77,28 @@ class BaseGAN(ABC):
                     h = w = self.dataset_config['image_size']
                     expected_pixels = c * h * w
                     actual_pixels = batch_samples.shape[1]
+                    
+                    # More robust handling for different output sizes
                     if actual_pixels == expected_pixels:
                         batch_samples = batch_samples.view(current_batch_size, c, h, w)
                     else:
-                        print(f"⚠️ Warning: Expected {expected_pixels} pixels, got {actual_pixels}")
+                        # For cases where dimensions don't match exactly
+                        print(f"Warning: Output dimensions mismatch. Expected {expected_pixels}, got {actual_pixels}")
+                        # Try to infer dimensions
+                        if c == 3:  # RGB images
+                            inferred_dim = int(np.sqrt(actual_pixels / 3))
+                            if inferred_dim**2 * 3 == actual_pixels:
+                                print(f"Inferred image size: {inferred_dim}x{inferred_dim} with 3 channels")
+                                batch_samples = batch_samples.view(current_batch_size, 3, inferred_dim, inferred_dim)
+                            else:
+                                print("Cannot reshape automatically, using default dimensions")
+                                # Use a default square shape
+                                if actual_pixels % 3 == 0:
+                                    side = int(np.sqrt(actual_pixels / 3))
+                                    batch_samples = batch_samples.view(current_batch_size, 3, side, side)
+                        elif c == 1:  # Grayscale images
+                            inferred_dim = int(np.sqrt(actual_pixels))
+                            batch_samples = batch_samples.view(current_batch_size, 1, inferred_dim, inferred_dim)
                 samples.append(batch_samples.cpu())
                 del z, batch_samples
                 self.device_manager.empty_cache()

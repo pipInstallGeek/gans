@@ -179,6 +179,12 @@ class GANEvaluator:
             # Generate samples
             n_samples = getattr(self.config, 'n_eval_samples', 5000)
             print(f"\n Generating {n_samples} samples...")
+            
+            # Special handling for VanillaGAN on CelebA
+            if model_name.lower() == 'vanilla' and dataset_name.lower() == 'celeba':
+                print("⚠️ Warning: VanillaGAN might not be optimal for high-resolution face generation.")
+                print("   Consider using DCGAN, WGAN, or SN-GAN for better results on CelebA.")
+            print(f"\n Generating {n_samples} samples...")
 
             fake_samples = model.generate_samples(n_samples, return_tensor=True).cpu()
 
@@ -246,25 +252,57 @@ class GANEvaluator:
                     print("Extracting inception features for real images...")
                     for i in tqdm(range(0, len(real_samples), 32), desc="Real Features"):
                         batch = real_samples[i:i + 32].to(self.device_manager.device)
-                        if batch.size(1) == 1:
+                        # Ensure batch has correct shape (N, C, H, W)
+                        if len(batch.shape) == 2:  # (N, D) for vanilla GAN
+                            # Reshape flat tensor to image format
+                            dim = int(np.sqrt(batch.size(1) // 3))
+                            batch = batch.view(batch.size(0), 3, dim, dim)
+                        elif batch.size(1) == 1:  # Grayscale
                             batch = batch.repeat(1, 3, 1, 1)
-                        batch = torch.nn.functional.interpolate(batch, size=(299, 299))
-                        features = inception(batch).cpu().numpy()
-                        real_features.append(features)
+                        
+                        # Ensure batch has proper spatial dimensions
+                        if len(batch.shape) == 4:  # Only resize if it's an image tensor
+                            batch = torch.nn.functional.interpolate(batch, size=(299, 299))
+                            features = inception(batch).cpu().numpy()
+                            real_features.append(features)
+                        else:
+                            print(f"Warning: Skipping batch with incorrect shape: {batch.shape}")
+                        
                         torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
                     print("Extracting inception features for fake images...")
                     for i in tqdm(range(0, len(fake_samples), 32), desc="Fake Features"):
                         batch = fake_samples[i:i + 32].to(self.device_manager.device)
-                        if batch.size(1) == 1:
+                        # Ensure batch has correct shape (N, C, H, W)
+                        if len(batch.shape) == 2:  # (N, D) for vanilla GAN
+                            # Reshape flat tensor to image format
+                            dim = int(np.sqrt(batch.size(1) // 3))
+                            batch = batch.view(batch.size(0), 3, dim, dim)
+                        elif batch.size(1) == 1:  # Grayscale
                             batch = batch.repeat(1, 3, 1, 1)
-                        batch = torch.nn.functional.interpolate(batch, size=(299, 299))
-                        features = inception(batch).cpu().numpy()
-                        fake_features.append(features)
+                        
+                        # Ensure batch has proper spatial dimensions
+                        if len(batch.shape) == 4:  # Only resize if it's an image tensor
+                            batch = torch.nn.functional.interpolate(batch, size=(299, 299))
+                            features = inception(batch).cpu().numpy()
+                            fake_features.append(features)
+                        else:
+                            print(f"Warning: Skipping batch with incorrect shape: {batch.shape}")
+                        
                         torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
-                    real_features = np.concatenate(real_features)
-                    fake_features = np.concatenate(fake_features)
+                    # Check if we have any features to concatenate
+                    if not real_features or not fake_features:
+                        print("❌ No features were extracted, cannot calculate mode metrics")
+                        return {}
+                    
+                    try:
+                        real_features = np.concatenate(real_features)
+                        fake_features = np.concatenate(fake_features)
+                    except ValueError as e:
+                        print(f"❌ Error concatenating features: {e}")
+                        print("This may happen if the features have inconsistent shapes")
+                        return {}
 
                 # Calculate mode metrics
                 print("📊 Calculating Mode Coverage and Collapse...")
