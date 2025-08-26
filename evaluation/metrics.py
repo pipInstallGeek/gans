@@ -257,7 +257,13 @@ class GANEvaluator:
                             # Reshape flat tensor to image format
                             dim = int(np.sqrt(batch.size(1) // 3))
                             batch = batch.view(batch.size(0), 3, dim, dim)
-                        elif batch.size(1) == 1:  # Grayscale
+                        elif len(batch.shape) == 3:  # Missing channel dimension (N, H, W)
+                            # Add channel dimension for grayscale
+                            batch = batch.unsqueeze(1)
+                            # Convert grayscale to RGB by repeating channel
+                            batch = batch.repeat(1, 3, 1, 1)
+                            print(f"Fixed missing channel dimension: {batch.shape}")
+                        elif batch.size(1) == 1:  # Grayscale (N, 1, H, W)
                             batch = batch.repeat(1, 3, 1, 1)
                         
                         # Ensure batch has proper spatial dimensions
@@ -278,7 +284,13 @@ class GANEvaluator:
                             # Reshape flat tensor to image format
                             dim = int(np.sqrt(batch.size(1) // 3))
                             batch = batch.view(batch.size(0), 3, dim, dim)
-                        elif batch.size(1) == 1:  # Grayscale
+                        elif len(batch.shape) == 3:  # Missing channel dimension (N, H, W)
+                            # Add channel dimension for grayscale
+                            batch = batch.unsqueeze(1)
+                            # Convert grayscale to RGB by repeating channel
+                            batch = batch.repeat(1, 3, 1, 1)
+                            print(f"Fixed missing channel dimension: {batch.shape}")
+                        elif batch.size(1) == 1:  # Grayscale (N, 1, H, W)
                             batch = batch.repeat(1, 3, 1, 1)
                         
                         # Ensure batch has proper spatial dimensions

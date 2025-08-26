@@ -126,18 +126,57 @@ class ExperimentRunner:
                     print(f"\n{'=' * 80}")
                     print(f"EVALUATION SUMMARY for {model_name}")
                     print(f"{'=' * 80}")
-                    print(f"FID: {results.get('fid', 'N/A'):.2f}")
-                    print(f"IS: {results.get('is_mean', 'N/A'):.2f} ± {results.get('is_std', 'N/A'):.2f}")
-                    print(f"KID: {results.get('kid_mean', 'N/A'):.6f} ± {results.get('kid_std', 'N/A'):.6f}")
-                    print(f"Mode Coverage: {results.get('mode_coverage', 'N/A'):.3f}")
-                    print(f"Mode Collapse Score: {results.get('mode_collapse_score', 'N/A'):.3f}")
+                    
+                    # Check for error in results
+                    if 'error' in results:
+                        print(f"Evaluation failed for {model_name} on {dataset_name}: {results['error']}")
+                    else:
+                        # Safely format numeric values
+                        fid = results.get('fid', 'N/A')
+                        fid_str = f"{fid:.2f}" if isinstance(fid, (int, float)) else str(fid)
+                        
+                        is_mean = results.get('is_mean', 'N/A')
+                        is_mean_str = f"{is_mean:.2f}" if isinstance(is_mean, (int, float)) else str(is_mean)
+                        
+                        is_std = results.get('is_std', 'N/A')
+                        is_std_str = f"{is_std:.2f}" if isinstance(is_std, (int, float)) else str(is_std)
+                        
+                        kid_mean = results.get('kid_mean', 'N/A')
+                        kid_mean_str = f"{kid_mean:.6f}" if isinstance(kid_mean, (int, float)) else str(kid_mean)
+                        
+                        kid_std = results.get('kid_std', 'N/A')
+                        kid_std_str = f"{kid_std:.6f}" if isinstance(kid_std, (int, float)) else str(kid_std)
+                        
+                        mode_coverage = results.get('mode_coverage', 'N/A')
+                        mode_coverage_str = f"{mode_coverage:.3f}" if isinstance(mode_coverage, (int, float)) else str(mode_coverage)
+                        
+                        mode_collapse = results.get('mode_collapse_score', 'N/A')
+                        mode_collapse_str = f"{mode_collapse:.3f}" if isinstance(mode_collapse, (int, float)) else str(mode_collapse)
+                        
+                        print(f"FID: {fid_str}")
+                        print(f"IS: {is_mean_str} ± {is_std_str}")
+                        print(f"KID: {kid_mean_str} ± {kid_std_str}")
+                        print(f"Mode Coverage: {mode_coverage_str}")
+                        print(f"Mode Collapse Score: {mode_collapse_str}")
 
-                    # PRDC metrics if available
-                    if 'precision' in results:
-                        print(f"Precision: {results['precision']:.3f}")
-                        print(f"Recall: {results['recall']:.3f}")
-                        print(f"Density: {results['density']:.3f}")
-                        print(f"Coverage: {results['coverage']:.3f}")
+                        # PRDC metrics if available
+                        if 'precision' in results:
+                            precision = results.get('precision', 'N/A')
+                            precision_str = f"{precision:.3f}" if isinstance(precision, (int, float)) else str(precision)
+                            
+                            recall = results.get('recall', 'N/A')
+                            recall_str = f"{recall:.3f}" if isinstance(recall, (int, float)) else str(recall)
+                            
+                            density = results.get('density', 'N/A')
+                            density_str = f"{density:.3f}" if isinstance(density, (int, float)) else str(density)
+                            
+                            coverage = results.get('coverage', 'N/A')
+                            coverage_str = f"{coverage:.3f}" if isinstance(coverage, (int, float)) else str(coverage)
+                            
+                            print(f"Precision: {precision_str}")
+                            print(f"Recall: {recall_str}")
+                            print(f"Density: {density_str}")
+                            print(f"Coverage: {coverage_str}")
 
                 except Exception as e:
                     print(f"Evaluation failed for {model_name} on {dataset_name}: {e}")
