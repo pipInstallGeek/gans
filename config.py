@@ -88,16 +88,6 @@ class Config:
                 'image_size': 64,
                 'num_channels': 3,
                 'num_classes': 1
-            },
-            'celeba-hq': {
-                'image_size': 256,
-                'num_channels': 3,
-                'num_classes': 1
-            },
-            'ffhq': {                    
-            'image_size': 64,        
-            'num_channels': 3,
-            'num_classes': 1
             }
         }
         return configs.get(dataset_name, {})

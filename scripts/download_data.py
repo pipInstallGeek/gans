@@ -6,63 +6,45 @@ import torchvision
 import torchvision.transforms as transforms
 import os
 import argparse
-import subprocess
-import sys
 
 def download_datasets(dataset=None):
-    """Download all required datasets"""
-    data_root = "data"
+    """Download all required datasets to ephemeral storage"""
+    data_root = "/tmp/data"
     os.makedirs(data_root, exist_ok=True)
     
     if dataset is None or dataset == "mnist":
-        print("Downloading MNIST...")
+        print("Downloading MNIST to ephemeral storage...")
         torchvision.datasets.MNIST(
             root=data_root, train=True, download=True,
             transform=transforms.ToTensor()
         )
     
     if dataset is None or dataset == "cifar10":
-        print("Downloading CIFAR-10...")
+        print("Downloading CIFAR-10 to ephemeral storage...")
         torchvision.datasets.CIFAR10(
             root=data_root, train=True, download=True,
             transform=transforms.ToTensor()
         )
     
     if dataset is None or dataset == "celeba":
-        print("Attempting to download CelebA...")
+        print("Attempting to download CelebA to ephemeral storage...")
         try:
             torchvision.datasets.CelebA(
                 root=data_root, split='train', download=True,
                 transform=transforms.ToTensor()
             )
-            print("CelebA downloaded successfully")
+            print("CelebA downloaded successfully to /tmp/data")
         except Exception as e:
             print(f"CelebA download failed: {e}")
             print("You may need to manually download CelebA from the official source")
     
-    if dataset is None or dataset == "celeba-hq":
-        print("For CelebA-HQ dataset, please use the dedicated download script:")
-        print("python scripts/download_celeba_hq.py --resolution 256")
-        
-        # Ask if user wants to download CelebA-HQ now
-        user_input = input("Do you want to download CelebA-HQ now? (y/n): ")
-        if user_input.lower() == 'y':
-            # Run the CelebA-HQ download script
-            try:
-                resolution = input("Enter resolution for CelebA-HQ images (default: 256): ") or "256"
-                print(f"Downloading CelebA-HQ at {resolution}x{resolution} resolution...")
-                download_script = os.path.join(os.path.dirname(__file__), "download_celeba_hq.py")
-                subprocess.call([sys.executable, download_script, "--resolution", resolution])
-            except Exception as e:
-                print(f"Error running CelebA-HQ download script: {e}")
-    
-    print("Dataset download complete!")
+    print("Dataset download complete! All datasets stored in ephemeral storage (/tmp/data)")
 
 if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Download datasets for GAN training')
     parser.add_argument('--dataset', type=str, default=None,
-                        choices=['mnist', 'cifar10', 'celeba', 'celeba-hq'],
+                        choices=['mnist', 'cifar10', 'celeba'],
                         help='Specific dataset to download (default: all)')
     
     args = parser.parse_args()
