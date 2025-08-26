@@ -163,12 +163,17 @@ class DatasetLoader:
                     print("CelebA dataset loaded via torchvision successfully.")
                 except Exception as e2:
                     print(f"Error loading CelebA via torchvision: {e2}")
-                    print("Creating emergency random dataset...")
-                    # Emergency fallback - create random data
-                    dataset = torch.utils.data.TensorDataset(
-                        torch.randn(1000, 3, 64, 64)
-                    )
-                    print("WARNING: Using random dummy data since CelebA dataset failed to load")
+                    print("\n" + "=" * 80)
+                    print("ERROR: Failed to load CelebA dataset")
+                    print("=" * 80)
+                    print("CelebA is required for face generation. Please follow these steps:")
+                    print("1. Make sure you have internet access")
+                    print("2. Run: python scripts/download_data.py --dataset celeba")
+                    print("3. If that fails, download CelebA manually from:")
+                    print("   https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html")
+                    print("   and extract it to /tmp/data/celeba")
+                    print("=" * 80 + "\n")
+                    raise RuntimeError("CelebA dataset is required for face generation")
         else:
             print("CelebA images not found. Will attempt to download.")
             try:
@@ -182,13 +187,17 @@ class DatasetLoader:
                 print("CelebA dataset downloaded and loaded successfully.")
             except Exception as e:
                 print(f"Error downloading/loading CelebA: {e}")
-                print("Creating emergency random dataset...")
-                # Emergency fallback - create random data
-                dataset = torch.utils.data.TensorDataset(
-                    torch.randn(1000, 3, 64, 64)
-                )
-                print("WARNING: Using random dummy data since CelebA dataset failed to load")
-                print("Please try downloading manually using: python scripts/download_celeba_manual.py")
+                print("\n" + "=" * 80)
+                print("ERROR: Failed to download CelebA dataset")
+                print("=" * 80)
+                print("CelebA is required for face generation. Please follow these steps:")
+                print("1. Make sure you have internet access")
+                print("2. Try running again with: python scripts/download_data.py --dataset celeba")
+                print("3. If that fails, download CelebA manually from:")
+                print("   https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html")
+                print("   and extract it to /tmp/data/celeba")
+                print("=" * 80 + "\n")
+                raise RuntimeError("CelebA dataset is required for face generation")
         
         dataloader = DataLoader(
             dataset,

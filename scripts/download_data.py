@@ -5,7 +5,11 @@ Script to pre-download datasets
 import torchvision
 import torchvision.transforms as transforms
 import os
+import sys
 import argparse
+
+# Add the scripts directory to the path for import
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def download_datasets(dataset=None):
     """Download all required datasets to ephemeral storage"""
@@ -29,14 +33,18 @@ def download_datasets(dataset=None):
     if dataset is None or dataset == "celeba":
         print("Attempting to download CelebA to ephemeral storage...")
         try:
-            torchvision.datasets.CelebA(
-                root=data_root, split='train', download=True,
-                transform=transforms.ToTensor()
-            )
-            print("CelebA downloaded successfully to /tmp/data")
+            # Use our dedicated CelebA downloader for better reliability
+            from download_celeba import download_celeba
+            success = download_celeba('/tmp/data/celeba', 'all')
+            
+            if not success:
+                print("\nAutomatic download failed. For more reliable download, run:")
+                print("python scripts/download_celeba.py")
+            else:
+                print("CelebA downloaded successfully to /tmp/data")
         except Exception as e:
             print(f"CelebA download failed: {e}")
-            print("You may need to manually download CelebA from the official source")
+            print("For more reliable download, run: python scripts/download_celeba.py")
     
     print("Dataset download complete! All datasets stored in ephemeral storage (/tmp/data)")
 
