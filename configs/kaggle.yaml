@@ -1,0 +1,6 @@
+# Default configuration overrides for Kaggle runs
+batch_size: 64
+epochs: 50
+sample_interval: 5
+eval_interval: 10
+fid_batch_size: 16
