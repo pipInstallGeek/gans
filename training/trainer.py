@@ -35,12 +35,12 @@ class GANTrainer:
             
             for i, batch in enumerate(pbar):
                 # GPU-OPTIMIZED DATA TRANSFER
-                if dataset_name == 'celeba':
-                    real_data = batch[0].to(self.config.device, non_blocking=True)  # NON_BLOCKING transfer
-                else:
-                    real_data, _ = batch
-                    real_data = real_data.to(self.config.device, non_blocking=True)  # NON_BLOCKING transfer
-                
+                if isinstance(batch, (list, tuple)):
+                    real_data = batch[0]
+                else:  # batch already a tensor
+                    real_data = batch
+                real_data = real_data.to(self.config.device, non_blocking=True)
+
                 # Training step
                 g_loss, d_loss = model.train_step(real_data)
                 
