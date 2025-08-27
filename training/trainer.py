@@ -85,11 +85,12 @@ class GANTrainer:
             pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{self.config.epochs}')
             for i, batch in enumerate(pbar):
                 # Move batch to device (MNIST/CIFAR return (x, y); CelebA returns images only)
-                if dataset_name == 'celeba':
-                    real_data = batch.to(self.device, non_blocking=True)
-                else:
-                    real_data, _ = batch
-                    real_data = real_data.to(self.device, non_blocking=True)
+                if isinstance(batch, (list, tuple)):
+                    real_data = batch[0]
+                else:  # batch already a tensor
+                    real_data = batch
+                
+                real_data = real_data.to(self.config.device, non_blocking=True)
 
                 # One step
                 g_loss, d_loss = model.train_step(real_data)  # typically tensors
