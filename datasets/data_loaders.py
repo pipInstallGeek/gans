@@ -1,6 +1,7 @@
 import os
 import glob
 from PIL import Image
+import torch.distributed as dist
 
 import torch
 import torchvision
@@ -45,22 +46,21 @@ class DatasetLoader:
         else:
             raise ValueError(f"Unknown dataset: {dataset_name}")
 
+    def _is_distributed(self):
+        return dist.is_available() and dist.is_initialized()
+
     def _create_dataloader(self, dataset, batch_size: int):
         """Internal helper to build a DataLoader and sampler depending on distributed state."""
-        # Determine if distributed training is active
-        is_distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
-        if is_distributed:
-            sampler = DistributedSampler(dataset)
+        sampler = None
+        shuffle = True
+        if self._is_distributed():
+            sampler = DistributedSampler(dataset, shuffle=True, drop_last=True)
             shuffle = False
-        else:
-            sampler = None
-            shuffle = True
-
         return DataLoader(
             dataset,
             batch_size=batch_size,
-            shuffle=shuffle if sampler is None else False,
             sampler=sampler,
+            shuffle=shuffle,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -197,6 +197,7 @@ class DatasetLoader:
         """Get dataloader for evaluation with smaller batch size"""
         return self.get_dataloader(dataset_name, batch_size)
     
+
 # Include the get_model_class function
 def get_model_class(model_name):
     """Get model class by name"""

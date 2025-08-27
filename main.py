@@ -18,6 +18,24 @@ from config import Config
 from experiments.run_experiments import ExperimentRunner
 from visualization.plotting import ResultsVisualizer
 
+import os
+import torch
+import torch.distributed as dist
+
+def maybe_init_ddp():
+    """Init DDP and pin rank -> device before any CUDA tensors are created."""
+    if 'LOCAL_RANK' in os.environ and not dist.is_initialized():
+        local_rank = int(os.environ['LOCAL_RANK'])
+        torch.cuda.set_device(local_rank)          # <-- critical: pin device
+        dist.init_process_group(backend='nccl', init_method='env://')
+        # helpful debug
+        print(f"[DDP] world_size={dist.get_world_size()} "
+              f"rank={dist.get_rank()} local_rank={local_rank} "
+              f"cuda:{torch.cuda.current_device()} {torch.cuda.get_device_name(torch.cuda.current_device())}")
+        return local_rank
+    return None
+
+LOCAL_RANK = maybe_init_ddp()
 def main():
     parser = argparse.ArgumentParser(description='GAN Comparison Framework')
     

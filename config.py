@@ -58,7 +58,10 @@ class Config:
 
         # GPU DEVICE WITH OPTIMIZATION
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+        if torch.cuda.is_available():
+            self.device = torch.device(f'cuda:{torch.cuda.current_device()}')
+        else:
+            self.device = torch.device('cpu')
         # GPU-specific optimizations
         if torch.cuda.is_available():
             # Enable cuDNN optimizations

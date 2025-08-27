@@ -5,7 +5,9 @@ import torch
 
 class DeviceManager:
     def __init__(self, device=None):
-        self.device = device or (torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        self.device = device or (
+            torch.device(f'cuda:{torch.cuda.current_device()}') if torch.cuda.is_available() else torch.device('cpu')
+        )
 
     def is_cuda(self):
         return self.device.type == 'cuda'
