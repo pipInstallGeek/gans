@@ -12,7 +12,7 @@ class Config:
 
     def __init__(self):
         # GPU-OPTIMIZED TRAINING PARAMETERS
-        self.batch_size = 512
+        self.batch_size = 128
         self.epochs = 25
         self.learning_rate_g = 0.0002
         self.learning_rate_d = 0.0002
