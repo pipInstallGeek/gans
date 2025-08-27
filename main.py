@@ -11,8 +11,9 @@ def install_requirements():
     else:
         print("requirements.txt not found, skipping auto-install.")
 
-install_requirements()
-
+if os.environ.get("LOCAL_RANK", "0") == "0":
+    install_requirements()
+    
 import torch
 from config import Config
 from experiments.run_experiments import ExperimentRunner
