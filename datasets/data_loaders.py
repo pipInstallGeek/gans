@@ -193,3 +193,24 @@ class DatasetLoader:
         # Finally build the DataLoader
         dataloader = self._create_dataloader(dataset, batch_size)
         return dataloader
+    def get_eval_dataloader(self, dataset_name, batch_size=64):  # Smaller eval batch
+        """Get dataloader for evaluation with smaller batch size"""
+        return self.get_dataloader(dataset_name, batch_size)
+    
+# Include the get_model_class function
+def get_model_class(model_name):
+    """Get model class by name"""
+    if model_name == 'vanilla':
+        from models.vanilla_gan import VanillaGAN
+        return VanillaGAN
+    elif model_name == 'dcgan':
+        from models.dcgan import DCGAN
+        return DCGAN
+    elif model_name == 'wgan':
+        from models.wgan import WGAN
+        return WGAN
+    elif model_name == 'sn_gan':
+        from models.sn_gan import SNGAN
+        return SNGAN
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
