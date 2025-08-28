@@ -61,8 +61,9 @@ def _build_drive_service_with_oauth(client_secrets: Path, token_json: Path):
 
 def _find_existing_file(service, name: str, folder_id: str) -> Optional[str]:
     # Search for a file with exact name in the target folder.
+    escaped_name = name.replace("'", "\\'")
     q = (
-        f"name = '{name.replace("'", "\\'")}' and "
+        f"name = '{escaped_name}' and "
         f"'{folder_id}' in parents and trashed = false"
     )
     res = service.files().list(q=q, fields="files(id, name)", pageSize=1).execute()
