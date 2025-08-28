@@ -66,7 +66,13 @@ def _find_existing_file(service, name: str, folder_id: str) -> Optional[str]:
         f"name = '{escaped_name}' and "
         f"'{folder_id}' in parents and trashed = false"
     )
-    res = service.files().list(q=q, fields="files(id, name)", pageSize=1).execute()
+    res = service.files().list(
+        q=q,
+        fields="files(id, name)",
+        pageSize=1,
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+    ).execute()
     items = res.get("files", [])
     return items[0]["id"] if items else None
 
@@ -78,7 +84,12 @@ def _upload_new(service, file_path: Path, folder_id: str, mime_type: Optional[st
     media = MediaFileUpload(
         str(file_path), mimetype=mime_type, resumable=True, chunksize=10 * 1024 * 1024
     )
-    req = service.files().create(body=body, media_body=media, fields="id")
+    req = service.files().create(
+        body=body,
+        media_body=media,
+        fields="id",
+        supportsAllDrives=True,
+    )
     return _resumable_upload(req)
 
 
@@ -88,7 +99,11 @@ def _update_existing(service, file_id: str, file_path: Path, mime_type: Optional
     media = MediaFileUpload(
         str(file_path), mimetype=mime_type, resumable=True, chunksize=10 * 1024 * 1024
     )
-    req = service.files().update(fileId=file_id, media_body=media)
+    req = service.files().update(
+        fileId=file_id,
+        media_body=media,
+        supportsAllDrives=True,
+    )
     return _resumable_upload(req)
 
 
@@ -178,4 +193,3 @@ def upload_to_drive(
 
 
 __all__ = ["upload_to_drive"]
-
